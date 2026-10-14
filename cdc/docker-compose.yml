@@ -1,0 +1,20 @@
+# Sybase -> GridGain CDC reader, running continuously.
+# Joins the GridGain cluster's Docker network. Do NOT also run `./run.sh run` on the host.
+services:
+  gg-cdc:
+    build: .
+    image: gg-cdc-reader:1.0
+    container_name: gg-cdc
+    environment:
+      # Sybase ASE runs on llama; use its IP because mDNS (.local) names do not resolve inside containers
+      ASE_URL: jdbc:jtds:sybase://192.168.68.73:5000/testdb
+      ASE_USER: tester
+      ASE_PASSWORD: guest1234
+      GG_URL: jdbc:ignite:thin://gridgain1:10800,gridgain2:10800,gridgain3:10800
+      CDC_POLL_MS: "500"
+    restart: unless-stopped
+
+networks:
+  default:
+    name: gridgain_default
+    external: true

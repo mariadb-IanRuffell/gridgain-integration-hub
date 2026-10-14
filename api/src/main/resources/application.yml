@@ -1,0 +1,35 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: customer360-api
+  datasource:
+    # Thin JDBC over all three GridGain nodes (host defaults; the container overrides these via env)
+    url: ${GG_JDBC_URL:jdbc:ignite:thin://127.0.0.1:10800,127.0.0.1:10801,127.0.0.1:10802}
+    driver-class-name: org.apache.ignite.IgniteJdbcThinDriver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+  jackson:
+    default-property-inclusion: non_null
+    serialization:
+      write-dates-as-timestamps: false
+
+gridgain:
+  # Thin client: used for compute jobs and id sequences
+  addresses: ${GG_ADDRESSES:127.0.0.1:10800,127.0.0.1:10801,127.0.0.1:10802}
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: alpha
+    tags-sorter: alpha
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health

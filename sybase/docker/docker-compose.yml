@@ -1,0 +1,18 @@
+# SAP ASE 16 (datagrip/sybase image) on a NATIVE x86_64 Linux host with a modern kernel (>= 5.8).
+# It does NOT work on Apple Silicon (Rosetta and QEMU user-mode both crash it): see README.md.
+#
+#   docker compose up -d        # ~60 s to boot; login tester / guest1234, database testdb, port 5000
+services:
+  sybase:
+    image: datagrip/sybase:latest
+    platform: linux/amd64
+    container_name: sybase
+    # Docker's default seccomp profile blocks personality(READ_IMPLIES_EXEC), which the shim needs.
+    security_opt:
+      - seccomp=unconfined
+    environment:
+      LD_PRELOAD: /rie/rie.so    # a few non-ASE 32-bit helpers log "cannot be preloaded: ignored"; harmless
+    volumes:
+      - ./rie-x86_64.so:/rie/rie.so:ro
+    ports:
+      - "5000:5000"

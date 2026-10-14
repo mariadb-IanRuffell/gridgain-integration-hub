@@ -1,0 +1,2 @@
+[{"at": 0.2, "js": "document.documentElement.style.zoom = '1.5'; window.dispatchEvent(new Event('resize')); document.getElementById('rate').value='20'; document.getElementById('rate').dispatchEvent(new Event('change')); 'ok'"},
+ {"at": 4.0, "js": "window.scrollTo(0, 900); 'ok'"}]

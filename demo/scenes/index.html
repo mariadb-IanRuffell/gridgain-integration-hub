@@ -1,0 +1,204 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>demo scenes</title>
+<style>
+:root { --bg1:#0a1120; --bg2:#12203b; --ink:#e8eefc; --mut:#8b98b3; --ase:#f59e0b; --gg:#2dd4bf; --api:#60a5fa; --bad:#fb7185; --ok:#4ade80; }
+* { box-sizing: border-box; margin: 0; }
+html, body { width: 1920px; height: 1080px; overflow: hidden; }
+body { background: radial-gradient(1200px 800px at 30% 20%, var(--bg2), var(--bg1)); color: var(--ink);
+       font: 400 30px/1.35 -apple-system, "SF Pro Display", "Helvetica Neue", Arial, sans-serif; }
+.scene { position: absolute; inset: 0; padding: 90px 110px; display: none; }
+.scene.on { display: block; }
+.fade { opacity: 0; transform: translateY(18px); transition: opacity .7s ease, transform .7s ease; }
+.fade.show { opacity: 1; transform: none; }
+h1 { font-size: 104px; font-weight: 700; letter-spacing: -2px; line-height: 1.05; }
+h2 { font-size: 58px; font-weight: 650; letter-spacing: -1px; }
+.sub { color: var(--mut); font-size: 38px; }
+.chip { display: inline-block; border: 2px solid #2a3b60; background: #14213d; border-radius: 14px; padding: 9px 20px; margin: 6px 8px 6px 0; font-size: 27px; }
+.mono { font-family: "SF Mono", Menlo, Consolas, monospace; }
+.c-ase { color: var(--ase); } .c-gg { color: var(--gg); } .c-api { color: var(--api); }
+
+/* s1 */
+#s1 { display: none; text-align: center; padding-top: 300px; }
+#s1.on { display: block; }
+#s1 .chips { margin-top: 70px; }
+#s1 .chip { font-size: 36px; padding: 16px 34px; }
+
+/* s2 diagram */
+.box { position: absolute; border-radius: 26px; border: 3px solid; background: #101b33; padding: 22px 20px; text-align: center; }
+.box b { display: block; font-size: 44px; margin-bottom: 6px; }
+.box small { color: var(--mut); font-size: 27px; display: block; line-height: 1.3; }
+#b-ase { left: 80px; top: 360px; width: 340px; height: 250px; border-color: var(--ase); }
+#b-cdc { left: 520px; top: 395px; width: 300px; height: 180px; border-color: #7aa2ff; }
+#b-gg { left: 930px; top: 270px; width: 470px; height: 440px; border-color: var(--gg); }
+#b-api { left: 1530px; top: 395px; width: 300px; height: 180px; border-color: var(--api); }
+#b-jobs { left: 930px; top: 150px; width: 470px; height: 90px; border-color: var(--gg); border-style: dashed; padding-top: 18px; }
+#b-jobs b { font-size: 36px; margin: 0; }
+.node { display: inline-block; width: 118px; height: 118px; border-radius: 50%; border: 3px solid var(--gg); margin: 22px 8px 0; line-height: 112px; font-size: 26px; background: #0f2a2e; }
+svg#arrows { position: absolute; inset: 0; width: 1920px; height: 1080px; pointer-events: none; }
+svg path { fill: none; stroke-width: 6; stroke-linecap: round; }
+.arrow { opacity: 0; transition: opacity .8s; } .arrow.show { opacity: 1; }
+.phase { position: absolute; font-size: 36px; font-weight: 650; border-radius: 14px; padding: 12px 26px; opacity: 0; transition: opacity .8s, transform .8s; transform: translateY(14px); }
+.phase.show { opacity: 1; transform: none; }
+#p1 { left: 600px; top: 800px; background: #1b2a52; color: #9db8ff; }
+#p2 { left: 1010px; top: 800px; background: #12332f; color: var(--gg); }
+#p3 { left: 80px; top: 800px; background: #3a2a0e; color: var(--ase); }
+#b-ase.retired { border-style: dashed; opacity: .55; }
+#strike { position: absolute; left: 60px; top: 470px; width: 380px; height: 6px; background: var(--bad); transform: rotate(-12deg); opacity: 0; transition: opacity .8s; }
+#strike.show { opacity: 1; }
+
+/* s3 */
+#s3 .left { position: absolute; left: 110px; top: 80px; width: 780px; }
+#s3 .right { position: absolute; left: 930px; top: 90px; width: 880px; }
+.code { background: #0b1326; border: 2px solid #26365a; border-radius: 22px; padding: 28px 34px; font-size: 24px; line-height: 1.45; color: #cfe0ff; height: 770px; overflow: hidden; white-space: pre-wrap; word-break: break-word; }
+.code .k { color: #c792ea; } .code .f { color: #7aa2ff; } .code .s { color: #ecc48d; } .code .n { color: #f78c6c; } .code .cm { color: #6b7ea5; }
+.cardtitle { color: var(--mut); font-size: 28px; margin-bottom: 12px; }
+
+/* terminal */
+.term { position: absolute; inset: 70px 90px; background: #0a0f1c; border: 2px solid #26365a; border-radius: 22px; overflow: hidden; display: flex; flex-direction: column; }
+.term .bar { height: 62px; background: #16203a; display: flex; align-items: center; padding: 0 24px; gap: 12px; color: var(--mut); font-size: 26px; }
+.term .dot { width: 18px; height: 18px; border-radius: 50%; background: #ff5f57; } .term .dot:nth-child(2) { background: #febc2e; } .term .dot:nth-child(3) { background: #28c840; }
+.term .body { flex: 1; padding: 26px 34px 56px; font: 400 27px/1.42 "SF Mono", Menlo, monospace; white-space: pre-wrap; overflow-wrap: break-word; display: flex; flex-direction: column; justify-content: flex-end; overflow: hidden; }
+.term .ln { min-height: 38px; flex-shrink: 0; }
+.pass { color: var(--ok); } .fail { color: var(--bad); } .hd { color: var(--api); font-weight: 700; } .pr { color: var(--gg); } .dim { color: var(--mut); }
+.cursor { display: inline-block; width: 14px; height: 30px; background: #cfe0ff; vertical-align: -5px; animation: blink 1s steps(1) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+
+/* s9 */
+#s9 ul { list-style: none; margin-top: 60px; }
+#s9 li { font-size: 46px; margin: 34px 0; padding-left: 70px; position: relative; }
+#s9 li::before { content: "✓"; position: absolute; left: 0; color: var(--ok); font-weight: 700; }
+#s9 .next { margin-top: 70px; font-size: 42px; color: var(--ase); }
+#s9 .foot { position: absolute; left: 110px; bottom: 60px; color: var(--mut); font-size: 26px; }
+</style></head>
+<body>
+
+<section class="scene" id="s1">
+  <h1 class="fade" id="s1a">From <span class="c-ase">Sybase</span> to <span class="c-gg">GridGain</span></h1>
+  <div class="sub fade" id="s1b" style="margin-top:34px">A two-phase migration, proven end to end</div>
+  <div class="chips fade" id="s1c"><span class="chip">① Replicate with CDC</span><span class="chip">② Procedures become compute jobs</span></div>
+</section>
+
+<section class="scene" id="s2">
+  <h2 class="fade" id="s2t" style="position:absolute;left:90px;top:60px">Two phases, one destination</h2>
+  <svg id="arrows" viewBox="0 0 1920 1080">
+    <defs><marker id="ah" markerWidth="10" markerHeight="10" refX="6" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#7aa2ff" style="stroke:none"/></marker>
+          <marker id="ah2" markerWidth="10" markerHeight="10" refX="6" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#60a5fa" style="stroke:none"/></marker></defs>
+    <path id="a1" class="arrow" d="M425,485 L510,485" stroke="#7aa2ff" marker-end="url(#ah)"/>
+    <path id="a2" class="arrow" d="M825,485 L920,485" stroke="#7aa2ff" marker-end="url(#ah)"/>
+    <path id="a3" class="arrow" d="M1405,485 L1520,485" stroke="#60a5fa" marker-end="url(#ah2)"/>
+    <path id="a4" class="arrow" d="M1165,262 L1165,250" stroke="#2dd4bf"/>
+  </svg>
+  <div class="box fade" id="b-ase"><b class="c-ase">Sybase ASE</b><small>system of record<br>triggers log every change</small></div>
+  <div class="box fade" id="b-cdc"><b style="color:#9db8ff">CDC reader</b><small>streams the log<br>into GridGain</small></div>
+  <div class="box fade" id="b-gg"><b class="c-gg">GridGain cluster</b><small>3 nodes · native persistence · backups</small>
+    <div><span class="node mono">node1</span><span class="node mono">node2</span><span class="node mono">node3</span></div>
+    <small style="margin-top:26px">customer data colocated by customer_id</small></div>
+  <div class="box fade" id="b-jobs"><b class="c-gg">6 compute jobs</b></div>
+  <div class="box fade" id="b-api"><b class="c-api">REST API</b><small>OpenAPI · live dashboard</small></div>
+  <div class="phase" id="p1">PHASE 1 · replicate</div>
+  <div class="phase" id="p2">PHASE 2 · re-implement</div>
+</section>
+
+<section class="scene" id="s3">
+  <div class="left">
+    <h2 class="fade" id="s3t">Customer 360 in Sybase</h2>
+    <div class="sub fade" id="s3s" style="margin:6px 0 26px;font-size:32px">10 tables · 250 customers · 6 procedures</div>
+    <div id="tables"></div>
+    <div class="cardtitle" style="margin-top:26px;font-size:26px">Stored procedures to migrate</div>
+    <div id="procs"></div>
+  </div>
+  <div class="right">
+    <div class="cardtitle fade" id="s3c">sp_add_order_item (excerpt): stock check inside a transaction</div>
+    <div class="code mono fade" id="code"></div>
+  </div>
+</section>
+
+<section class="scene" id="term"><div class="term">
+  <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span id="termtitle" style="margin-left:18px"></span></div>
+  <div class="body" id="termbody"></div></div></section>
+
+<section class="scene" id="s9">
+  <h2 class="fade" id="s9t">What the demo showed</h2>
+  <ul><li class="fade">Every Sybase change reaches GridGain within about a second, and table sizes match row for row</li>
+      <li class="fade">Six stored procedures run as compute jobs with identical results: 16 of 16 parity checks</li>
+      <li class="fade">A 3-node persistent cluster loses a node and keeps serving, then rejoins with its data</li></ul>
+  <div class="foot fade">Sybase ASE itself runs on a Linux server: this 2015 build cannot run on an Apple Silicon Mac</div>
+</section>
+
+<script>
+const q = new URLSearchParams(location.search), scene = q.get('scene'), D = parseFloat(q.get('d') || '20'), kind = q.get('kind');
+const $ = id => document.getElementById(id);
+const show = (id, extra = '') => $(id) && $(id).classList.add('show');
+const at = (sec, fn) => setTimeout(fn, sec * 1000);
+const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+
+function pretty(out) {   // top-level keys on their own lines; values compact but with spaces so lines wrap at spaces
+  try {
+    const o = JSON.parse(out);
+    if (o && typeof o === 'object' && !Array.isArray(o)) {
+      const f = v => JSON.stringify(v).replace(/,"/g, ', "').replace(/":/g, '": ').replace(/,\{/g, ', {');
+      return '{\n' + Object.entries(o).map(([k, v]) => '  "' + k + '": ' + f(v)).join(',\n') + '\n}';
+    }
+  } catch (e) {}
+  return out;
+}
+function typeInto(el, text, ms, done) { let i = 0; const t = setInterval(() => { el.textContent = text.slice(0, ++i); if (i >= text.length) { clearInterval(t); done && done(); } }, ms); }
+
+async function run() {
+  if (scene === 's1') {
+    $('s1').classList.add('on'); at(0.3, () => show('s1a')); at(1.4, () => show('s1b')); at(2.6, () => show('s1c'));
+  }
+  if (scene === 's2') {
+    $('s2').classList.add('on');
+    at(0.2, () => show('s2t')); at(0.9, () => show('b-ase'));
+    at(D * 0.17, () => { ['b-cdc', 'b-gg'].forEach(show); ['a1', 'a2'].forEach(show); show('p1'); });
+    at(D * 0.50, () => { show('b-jobs'); show('b-api'); show('a3'); show('a4'); show('p2'); });
+  }
+  if (scene === 's3') {
+    $('s3').classList.add('on');
+    const tables = ['customer', 'address', 'orders', 'order_item', 'payment', 'interaction', 'loyalty_txn', 'product', 'customer_score', 'loyalty_tier_rule'];
+    const procs = ['sp_customer_360', 'sp_recalc_loyalty_tier', 'sp_create_order', 'sp_add_order_item', 'sp_complete_order', 'sp_score_customers'];
+    $('tables').innerHTML = tables.map((t, i) => `<span class="chip mono fade" id="t${i}">${t}</span>`).join('');
+    $('procs').innerHTML = procs.map((t, i) => `<span class="chip mono c-gg fade" style="border-color:#1c5d58" id="pr${i}">${t}</span>`).join('');
+    let code = await (await fetch('../data/proc.txt')).text();
+    const lines = code.split('\n'), ind = Math.min(...lines.filter(l => l.trim()).map(l => l.match(/^ */)[0].length));
+    code = lines.map(l => l.slice(ind)).join('\n');
+    $('code').innerHTML = esc(code).replace(/\b(begin|end|tran|if|insert|values|update|set|where|commit|rollback|return)\b/g, '<span class="k">$1</span>')
+      .replace(/'[^']*'/g, m => `<span class="s">${m}</span>`).replace(/(@\w+)/g, '<span class="f">$1</span>').replace(/(-\d+|\b20003\b)/g, '<span class="n">$1</span>');
+    at(0.2, () => show('s3t')); at(0.7, () => show('s3s'));
+    tables.forEach((_, i) => at(1.2 + i * 0.35, () => show('t' + i)));
+    at(D * 0.48, () => { show('s3c'); show('code'); });
+    procs.forEach((_, i) => at(D * 0.50 + i * 0.55, () => show('pr' + i)));
+  }
+  if (scene === 'term') {
+    $('term').classList.add('on');
+    const body = $('termbody'), mk = (cls = '') => { const d = document.createElement('div'); d.className = 'ln ' + cls; body.appendChild(d); return d; };
+    if (kind === 'parity') {
+      $('termtitle').textContent = 'phase2: parity harness';
+      const txt = (await (await fetch('../data/parity.txt')).text()).split('\n').filter(l => l.trim() && !l.includes('NOTE:') && !l.startsWith('   customer ') );
+      const cmd = mk(); cmd.innerHTML = '<span class="pr">$</span> ./run.sh parity all<span class="cursor"></span>';
+      const per = Math.max(0.12, (D - 4.5) / txt.length);
+      txt.forEach((l, i) => at(1.2 + i * per, () => {
+        const d = mk(l.startsWith('==') ? 'hd' : l.includes('PASS') ? 'pass' : l.includes('FAIL') ? 'fail' : l.startsWith('PARITY') ? 'pass' : 'dim');
+        d.textContent = l.startsWith('PARITY') ? '\n' + l : l; cmd.querySelector('.cursor') && (cmd.querySelector('.cursor').style.display = 'none');
+      }));
+    } else {
+      $('termtitle').textContent = 'REST API · localhost:8080';
+      const items = await (await fetch('../data/api.json')).json();
+      const per = (D - 2) / items.length;
+      items.forEach((it, i) => {
+        const t0 = 0.4 + i * per;
+        at(t0, () => { if (i > 0) body.innerHTML = ''; const c = mk(); c.innerHTML = '<span class="pr">$</span> <span id="cmd' + i + '"></span>'; typeInto($('cmd' + i), it.cmd, 6); });
+        at(t0 + it.cmd.length * 0.006 + 0.7, () => { const o = mk('c-api'); o.textContent = pretty(it.out); mk(); });
+      });
+    }
+  }
+  if (scene === 's9') {
+    $('s9').classList.add('on'); at(0.3, () => show('s9t'));
+    [...document.querySelectorAll('#s9 li')].forEach((li, i) => at(1.2 + i * (D * 0.2), () => li.classList.add('show')));
+    at(D * 0.82, () => document.querySelector('#s9 .foot').classList.add('show'));
+  }
+}
+run();
+</script>
+</body></html>

@@ -1,0 +1,18 @@
+# Customer 360 REST API, deployed next to the GridGain cluster.
+# Joins the cluster's Docker network (created by ../gridgain/docker-compose.yml) so it reaches the nodes by name.
+services:
+  gg-api:
+    build: .
+    image: gg-customer360-api:1.0
+    container_name: gg-api
+    ports:
+      - "8080:8080"
+    environment:
+      GG_JDBC_URL: jdbc:ignite:thin://gridgain1:10800,gridgain2:10800,gridgain3:10800
+      GG_ADDRESSES: gridgain1:10800,gridgain2:10800,gridgain3:10800
+    restart: unless-stopped
+
+networks:
+  default:
+    name: gridgain_default
+    external: true

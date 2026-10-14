@@ -1,0 +1,18 @@
+[
+  {
+    "cmd": "curl -s localhost:8080/api/v1/customers/2/360 | jq '{profile: .profile[0] | {customer_id, first_name, last_name, loyalty_tier, loyalty_points}, order_summary: .order_summary[0] | {order_count, lifetime_spend, spend_12m}, top_categories}'",
+    "out": "{\"profile\":{\"customer_id\":2,\"first_name\":\"Sophia\",\"last_name\":\"Wilson\",\"loyalty_tier\":\"GOLD\",\"loyalty_points\":73260},\"order_summary\":{\"order_count\":13,\"lifetime_spend\":60075.00,\"spend_12m\":35900.00},\"top_categories\":[{\"category\":\"FLIGHT\",\"spend\":38400.00,\"qty\":7},{\"category\":\"UPGRADE\",\"spend\":9300.00,\"qty\":6},{\"category\":\"HOTEL\",\"spend\":5500.00,\"qty\":4}]}"
+  },
+  {
+    "cmd": "curl -s -X POST localhost:8080/api/v1/orders -H 'Content-Type: application/json' \\\n     -d '{\"customerId\":2,\"channel\":\"APP\",\"items\":[{\"productId\":4,\"quantity\":2},{\"productId\":17,\"quantity\":1}]}' | jq",
+    "out": "{\"orderId\":1000002018,\"customerId\":2,\"totalAmount\":11860.00,\"points\":17790,\"tierBefore\":\"GOLD\",\"tierAfter\":\"GOLD\",\"loyaltyPoints\":91050}"
+  },
+  {
+    "cmd": "curl -s 'localhost:8080/api/v1/customers?status=ACTIVE&tier=string' | jq -r .detail",
+    "out": "Invalid value 'string' for parameter 'tier'. Allowed values: BLUE, SILVER, GOLD, PLATINUM"
+  },
+  {
+    "cmd": "curl -s -X POST localhost:8080/api/v1/orders -H 'Content-Type: application/json' \\\n     -d '{\"customerId\":2,\"items\":[{\"productId\":4,\"quantity\":0}]}' | jq -r .detail",
+    "out": "items[0].quantity must be greater than or equal to 1"
+  }
+]

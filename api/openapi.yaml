@@ -1,0 +1,1588 @@
+openapi: 3.0.1
+info:
+  title: Customer 360 API
+  description: |
+    CRUD and business operations over the Customer 360 data held in a GridGain 8.9 cluster
+    (replicated from Sybase ASE by CDC during the phased migration).
+
+    * Resource endpoints read and write GridGain tables through SQL.
+    * Business operations (`360`, `recalculate`, `scoring`, `POST /orders`) call the GridGain compute
+      jobs that replace the former Sybase stored procedures, so rules such as stock checks,
+      loyalty points and tier changes are applied atomically on the node that owns the customer.
+    * Timestamps are ISO-8601 UTC. Errors use RFC 7807 problem details.
+
+    Note: while Sybase is still the system of record, rows written through this API exist only in
+    GridGain (CDC is one-way, Sybase to GridGain).
+  version: 1.0.0
+servers:
+- url: http://localhost:8080
+  description: Local Docker
+tags:
+- name: Customers
+  description: Customer master data
+- name: Addresses
+  description: Customer addresses (nested under a customer)
+- name: Products
+  description: Product catalogue and stock
+- name: Orders
+  description: "Orders, line items and payments. Creating an order runs the place-order\
+    \ job"
+- name: Interactions
+  description: Customer service interactions (nested under a customer)
+- name: Loyalty
+  description: "Loyalty tiers, points ledger and churn score (read-only data)"
+- name: Operations
+  description: Business operations implemented as GridGain compute jobs
+- name: Dashboard
+  description: Data behind the live dashboard page at /dashboard.html
+paths:
+  /api/v1/products/{productId}:
+    get:
+      tags:
+      - Products
+      summary: Get a product
+      operationId: get
+      parameters:
+      - name: productId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int32
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/Product"
+    put:
+      tags:
+      - Products
+      summary: Replace a product
+      description: "Also the way to adjust price, stock or deactivate a product."
+      operationId: update
+      parameters:
+      - name: productId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int32
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductInput"
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/Product"
+    delete:
+      tags:
+      - Products
+      summary: Delete a product
+      description: Refused with 409 if any order line references it (set active=false
+        instead).
+      operationId: delete
+      parameters:
+      - name: productId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int32
+      responses:
+        "200":
+          description: OK
+  /api/v1/orders/{orderId}:
+    get:
+      tags:
+      - Orders
+      summary: Get an order with its line items and payments
+      operationId: get_1
+      parameters:
+      - name: orderId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int32
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/Order"
+    put:
+      tags:
+      - Orders
+      summary: Change an order's sales channel
+      description: "Totals, items and status are produced by the place-order job and\
+        \ are not editable."
+      operationId: update_1
+      parameters:
+      - name: orderId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int32
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrderUpdate"
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/Order"
+    delete:
+      tags:
+      - Orders
+      summary: Delete a cancelled order
+      description: Only CANCELLED orders can be deleted (409 otherwise).
+      operationId: delete_1
+      parameters:
+      - name: orderId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int32
+      responses:
+        "200":
+          description: OK
+  /api/v1/customers/{customerId}:
+    get:
+      tags:
+      - Customers
+      summary: Get a customer
+      operationId: get_2
+      parameters:
+      - name: customerId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int32
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/Customer"
+    put:
+      tags:
+      - Customers
+      summary: Replace a customer's editable fields
+      description: "Loyalty tier and points are not editable here: they change through\
+        \ orders and the recalculate operation."
+      operationId: update_2
+      parameters:
+      - name: customerId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int32
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CustomerInput"
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/Customer"
+    delete:
+      tags:
+      - Customers
+      summary: Delete a customer
+      description: "Refused with 409 if the customer has orders (set status INACTIVE\
+        \ instead). Otherwise also removes their addresses, interactions, loyalty\
+        \ transactions and score."
+      operationId: delete_2
+      parameters:
+      - name: customerId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int32
+      responses:
+        "200":
+          description: OK
+  /api/v1/customers/{customerId}/interactions/{interactionId}:
+    get:
+      tags:
+      - Interactions
+      summary: Get an interaction
+      operationId: get_3
+      parameters:
+      - name: customerId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int32
+      - name: interactionId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int32
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/Interaction"
+    put:
+      tags:
+      - Interactions
+      summary: Replace an interaction
+      description: Closing it stamps closedAt; re-opening clears it.
+      operationId: update_3
+      parameters:
+      - name: customerId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int32
+      - name: interactionId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int32
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InteractionInput"
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/Interaction"
+    delete:
+      tags:
+      - Interactions
+      summary: Delete an interaction
+      operationId: delete_3
+      parameters:
+      - name: customerId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int32
+      - name: interactionId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int32
+      responses:
+        "200":
+          description: OK
+  /api/v1/customers/{customerId}/addresses/{addressId}:
+    get:
+      tags:
+      - Addresses
+      summary: Get an address
+      operationId: get_4
+      parameters:
+      - name: customerId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int32
+      - name: addressId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int32
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/Address"
+    put:
+      tags:
+      - Addresses
+      summary: Replace an address
+      operationId: update_4
+      parameters:
+      - name: customerId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int32
+      - name: addressId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int32
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddressInput"
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/Address"
+    delete:
+      tags:
+      - Addresses
+      summary: Delete an address
+      operationId: delete_4
+      parameters:
+      - name: customerId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int32
+      - name: addressId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int32
+      responses:
+        "200":
+          description: OK
+  /api/v1/scoring/run:
+    post:
+      tags:
+      - Operations
+      summary: Score all active customers for churn risk
+      description: Runs one job per cluster node; each scores the customers it owns
+        and upserts customer_score (replaces sp_score_customers). Returns the number
+        of customers and average score per risk band.
+      operationId: score
+      parameters:
+      - name: asOf
+        in: query
+        description: Score as of this instant (ISO-8601); defaults to now
+        required: false
+        schema:
+          type: string
+          format: date-time
+        example: 2026-10-14T12:00:00Z
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  type: object
+  /api/v1/products:
+    get:
+      tags:
+      - Products
+      summary: List products
+      operationId: list
+      parameters:
+      - name: category
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - FLIGHT
+          - HOTEL
+          - LOUNGE
+          - UPGRADE
+          - INSURANCE
+          - ANCILLARY
+      - name: active
+        in: query
+        required: false
+        schema:
+          type: boolean
+      - name: q
+        in: query
+        description: Case-insensitive fragment of the name
+        required: false
+        schema:
+          type: string
+      - name: limit
+        in: query
+        required: false
+        schema:
+          maximum: 500
+          minimum: 1
+          type: integer
+          format: int32
+          default: 50
+      - name: offset
+        in: query
+        required: false
+        schema:
+          minimum: 0
+          type: integer
+          format: int32
+          default: 0
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PageProduct"
+    post:
+      tags:
+      - Products
+      summary: Create a product
+      description: SKU must be unique.
+      operationId: create
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductInput"
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/Product"
+  /api/v1/orders:
+    get:
+      tags:
+      - Orders
+      summary: List orders
+      description: "Newest first. Line items and payments are only included by GET\
+        \ /orders/{id}."
+      operationId: list_1
+      parameters:
+      - name: customerId
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - NEW
+          - COMPLETED
+          - CANCELLED
+      - name: limit
+        in: query
+        required: false
+        schema:
+          maximum: 500
+          minimum: 1
+          type: integer
+          format: int32
+          default: 50
+      - name: offset
+        in: query
+        required: false
+        schema:
+          minimum: 0
+          type: integer
+          format: int32
+          default: 0
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PageOrder"
+    post:
+      tags:
+      - Orders
+      summary: Place an order
+      description: "Runs the place-order compute job: one transaction on the customer's\
+        \ node that checks stock, decrements it, creates the order, line items and\
+        \ payment, awards loyalty points at the customer's current tier and recalculates\
+        \ the tier. All-or-nothing: if any line fails nothing changes. 409 = insufficient\
+        \ stock, 404 = unknown or inactive customer, 400 = bad quantity or unknown\
+        \ product."
+      operationId: place
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlaceOrderRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PlaceOrderResult"
+  /api/v1/customers:
+    get:
+      tags:
+      - Customers
+      summary: List customers
+      description: "Filter by status, loyalty tier, exact email, or a name fragment;\
+        \ paged."
+      operationId: list_2
+      parameters:
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - ACTIVE
+          - INACTIVE
+      - name: tier
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - BLUE
+          - SILVER
+          - GOLD
+          - PLATINUM
+      - name: email
+        in: query
+        description: "Exact email, case-insensitive"
+        required: false
+        schema:
+          type: string
+      - name: q
+        in: query
+        description: Case-insensitive fragment of first or last name
+        required: false
+        schema:
+          type: string
+      - name: limit
+        in: query
+        required: false
+        schema:
+          maximum: 500
+          minimum: 1
+          type: integer
+          format: int32
+          default: 50
+      - name: offset
+        in: query
+        required: false
+        schema:
+          minimum: 0
+          type: integer
+          format: int32
+          default: 0
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PageCustomer"
+    post:
+      tags:
+      - Customers
+      summary: Create a customer
+      description: New customers start at tier BLUE with 0 points. Email must be unique
+        (case-insensitive).
+      operationId: create_1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CustomerInput"
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/Customer"
+  /api/v1/customers/{customerId}/loyalty/recalculate:
+    post:
+      tags:
+      - Operations
+      summary: Recalculate a customer's loyalty tier
+      description: Derives the tier from trailing-12-month completed spend and updates
+        the customer if it changed (replaces sp_recalc_loyalty_tier).
+      operationId: recalculate
+      parameters:
+      - name: customerId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int32
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                type: object
+                additionalProperties:
+                  type: object
+  /api/v1/customers/{customerId}/interactions:
+    get:
+      tags:
+      - Interactions
+      summary: List a customer's service interactions
+      description: Newest first.
+      operationId: list_3
+      parameters:
+      - name: customerId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int32
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - OPEN
+          - CLOSED
+      - name: limit
+        in: query
+        required: false
+        schema:
+          maximum: 500
+          minimum: 1
+          type: integer
+          format: int32
+          default: 50
+      - name: offset
+        in: query
+        required: false
+        schema:
+          minimum: 0
+          type: integer
+          format: int32
+          default: 0
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PageInteraction"
+    post:
+      tags:
+      - Interactions
+      summary: Log an interaction
+      operationId: create_2
+      parameters:
+      - name: customerId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int32
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InteractionInput"
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/Interaction"
+  /api/v1/customers/{customerId}/addresses:
+    get:
+      tags:
+      - Addresses
+      summary: List a customer's addresses
+      operationId: list_4
+      parameters:
+      - name: customerId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int32
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Address"
+    post:
+      tags:
+      - Addresses
+      summary: Add an address
+      description: Marking it primary clears the flag on the customer's other addresses.
+      operationId: create_3
+      parameters:
+      - name: customerId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int32
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddressInput"
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/Address"
+  /api/v1/loyalty-tiers:
+    get:
+      tags:
+      - Loyalty
+      summary: List loyalty tiers
+      description: Spend thresholds (trailing 12 months) and points multipliers.
+      operationId: tiers
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LoyaltyTier"
+  /api/v1/dashboard/summary:
+    get:
+      tags:
+      - Dashboard
+      summary: "Table sizes, CDC status and REST totals"
+      description: "Row counts per table in GridGain and (as last counted by the CDC\
+        \ reader) in Sybase, CDC position, lag and cumulative counters, REST request\
+        \ totals and the GridGain server nodes. Refreshed every 2-5 seconds."
+      operationId: summary
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/Summary"
+  /api/v1/dashboard/series:
+    get:
+      tags:
+      - Dashboard
+      summary: Throughput time series for the live graphs
+      description: "One sample every 2 seconds for the last 15 minutes: REST requests/s\
+        \ (reads, writes, errors, average latency) and CDC events/s (upserts, deletes),\
+        \ backlog and latency. Pass since=<epoch ms of the last sample you have> to\
+        \ get only newer samples."
+      operationId: series
+      parameters:
+      - name: since
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int64
+          default: 0
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/Series"
+  /api/v1/customers/{customerId}/score:
+    get:
+      tags:
+      - Loyalty
+      summary: A customer's latest churn score
+      description: Produced by POST /scoring/run; 404 if not yet scored.
+      operationId: score_1
+      parameters:
+      - name: customerId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int32
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/CustomerScore"
+  /api/v1/customers/{customerId}/loyalty-transactions:
+    get:
+      tags:
+      - Loyalty
+      summary: A customer's points ledger
+      description: Newest first. Written by the place-order job.
+      operationId: transactions
+      parameters:
+      - name: customerId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int32
+      - name: limit
+        in: query
+        required: false
+        schema:
+          maximum: 500
+          minimum: 1
+          type: integer
+          format: int32
+          default: 50
+      - name: offset
+        in: query
+        required: false
+        schema:
+          minimum: 0
+          type: integer
+          format: int32
+          default: 0
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PageLoyaltyTransaction"
+  /api/v1/customers/{customerId}/360:
+    get:
+      tags:
+      - Operations
+      summary: Customer 360 view
+      description: "Runs the customer-360 job on the node that owns the customer (replaces\
+        \ sp_customer_360). Returns six sections: profile, order_summary, recent_orders,\
+        \ top_categories, interactions, loyalty. Each section is a list of rows (objects\
+        \ with snake_case column names)."
+      operationId: customer360
+      parameters:
+      - name: customerId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int32
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                type: object
+                additionalProperties:
+                  type: object
+components:
+  schemas:
+    ProductInput:
+      required:
+      - category
+      - name
+      - sku
+      - stockQty
+      - unitPrice
+      type: object
+      properties:
+        sku:
+          maxLength: 20
+          minLength: 0
+          type: string
+        name:
+          maxLength: 100
+          minLength: 0
+          type: string
+        category:
+          pattern: FLIGHT|HOTEL|LOUNGE|UPGRADE|INSURANCE|ANCILLARY
+          type: string
+        unitPrice:
+          minimum: 0
+          type: number
+        stockQty:
+          minimum: 0
+          type: integer
+          format: int32
+        active:
+          type: boolean
+          description: Defaults to true
+    Product:
+      type: object
+      properties:
+        productId:
+          type: integer
+          format: int32
+        sku:
+          type: string
+        name:
+          type: string
+        category:
+          type: string
+        unitPrice:
+          type: number
+        stockQty:
+          type: integer
+          format: int32
+        active:
+          type: boolean
+    OrderUpdate:
+      required:
+      - channel
+      type: object
+      properties:
+        channel:
+          pattern: WEB|APP|CALL|AGENT
+          type: string
+    Order:
+      type: object
+      properties:
+        orderId:
+          type: integer
+          format: int32
+        customerId:
+          type: integer
+          format: int32
+        orderDate:
+          type: string
+          format: date-time
+        status:
+          type: string
+        channel:
+          type: string
+        totalAmount:
+          type: number
+        currency:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/OrderItem"
+        payments:
+          type: array
+          items:
+            $ref: "#/components/schemas/Payment"
+    OrderItem:
+      type: object
+      properties:
+        orderItemId:
+          type: integer
+          format: int32
+        orderId:
+          type: integer
+          format: int32
+        productId:
+          type: integer
+          format: int32
+        qty:
+          type: integer
+          format: int32
+        unitPrice:
+          type: number
+        lineTotal:
+          type: number
+    Payment:
+      type: object
+      properties:
+        paymentId:
+          type: integer
+          format: int32
+        orderId:
+          type: integer
+          format: int32
+        method:
+          type: string
+        amount:
+          type: number
+        status:
+          type: string
+        paidAt:
+          type: string
+          format: date-time
+    CustomerInput:
+      required:
+      - email
+      - firstName
+      - lastName
+      type: object
+      properties:
+        firstName:
+          maxLength: 60
+          minLength: 0
+          type: string
+        lastName:
+          maxLength: 60
+          minLength: 0
+          type: string
+        email:
+          maxLength: 120
+          minLength: 0
+          type: string
+        phone:
+          maxLength: 30
+          minLength: 0
+          type: string
+        dateOfBirth:
+          type: string
+          format: date
+        nationality:
+          maxLength: 2
+          minLength: 2
+          type: string
+          description: ISO 3166-1 alpha-2 country code
+          example: AE
+        segment:
+          pattern: STANDARD|PREMIUM|CORPORATE
+          type: string
+          description: Defaults to STANDARD
+          enum:
+          - STANDARD
+          - PREMIUM
+          - CORPORATE
+        marketingOptIn:
+          type: boolean
+          description: Defaults to false
+        status:
+          pattern: ACTIVE|INACTIVE
+          type: string
+          description: Defaults to ACTIVE
+          enum:
+          - ACTIVE
+          - INACTIVE
+    Customer:
+      type: object
+      properties:
+        customerId:
+          type: integer
+          format: int32
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        dateOfBirth:
+          type: string
+          format: date
+        nationality:
+          type: string
+        segment:
+          type: string
+        loyaltyTier:
+          type: string
+        loyaltyPoints:
+          type: integer
+          format: int32
+        marketingOptIn:
+          type: boolean
+        status:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    InteractionInput:
+      required:
+      - channel
+      - type
+      type: object
+      properties:
+        channel:
+          pattern: CALL|EMAIL|CHAT|SOCIAL
+          type: string
+        type:
+          pattern: COMPLAINT|ENQUIRY|FEEDBACK|BOOKING_CHANGE
+          type: string
+        subject:
+          maxLength: 200
+          minLength: 0
+          type: string
+        sentiment:
+          maximum: 1
+          minimum: -1
+          type: integer
+          description: "-1 negative, 0 neutral, 1 positive; defaults to 0"
+          format: int32
+        status:
+          pattern: OPEN|CLOSED
+          type: string
+          description: Defaults to OPEN. Closing sets closedAt
+    Interaction:
+      type: object
+      properties:
+        interactionId:
+          type: integer
+          format: int32
+        customerId:
+          type: integer
+          format: int32
+        channel:
+          type: string
+        type:
+          type: string
+        subject:
+          type: string
+        sentiment:
+          type: integer
+          format: int32
+        status:
+          type: string
+        openedAt:
+          type: string
+          format: date-time
+        closedAt:
+          type: string
+          format: date-time
+    AddressInput:
+      required:
+      - addrType
+      - city
+      - country
+      - line1
+      type: object
+      properties:
+        addrType:
+          pattern: HOME|BILLING|WORK
+          type: string
+        line1:
+          maxLength: 120
+          minLength: 0
+          type: string
+        city:
+          maxLength: 60
+          minLength: 0
+          type: string
+        postcode:
+          maxLength: 20
+          minLength: 0
+          type: string
+        country:
+          maxLength: 2
+          minLength: 2
+          type: string
+        primary:
+          type: boolean
+          description: Making an address primary clears the flag on the customer's
+            other addresses
+    Address:
+      type: object
+      properties:
+        addressId:
+          type: integer
+          format: int32
+        customerId:
+          type: integer
+          format: int32
+        addrType:
+          type: string
+        line1:
+          type: string
+        city:
+          type: string
+        postcode:
+          type: string
+        country:
+          type: string
+        primary:
+          type: boolean
+    OrderLine:
+      required:
+      - productId
+      - quantity
+      type: object
+      properties:
+        productId:
+          type: integer
+          format: int32
+        quantity:
+          maximum: 100
+          minimum: 1
+          type: integer
+          format: int32
+    PlaceOrderRequest:
+      required:
+      - customerId
+      - items
+      type: object
+      properties:
+        customerId:
+          type: integer
+          format: int32
+        channel:
+          pattern: WEB|APP|CALL|AGENT
+          type: string
+          description: Defaults to WEB
+          enum:
+          - WEB
+          - APP
+          - CALL
+          - AGENT
+        paymentMethod:
+          pattern: CARD|POINTS|WALLET
+          type: string
+          description: Defaults to CARD
+          enum:
+          - CARD
+          - POINTS
+          - WALLET
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/OrderLine"
+    PlaceOrderResult:
+      type: object
+      properties:
+        orderId:
+          type: integer
+          format: int32
+        customerId:
+          type: integer
+          format: int32
+        totalAmount:
+          type: number
+        points:
+          type: integer
+          format: int32
+        tierBefore:
+          type: string
+        tierAfter:
+          type: string
+        loyaltyPoints:
+          type: integer
+          format: int32
+    PageProduct:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Product"
+        limit:
+          type: integer
+          format: int32
+        offset:
+          type: integer
+          format: int32
+        total:
+          type: integer
+          format: int64
+    PageOrder:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Order"
+        limit:
+          type: integer
+          format: int32
+        offset:
+          type: integer
+          format: int32
+        total:
+          type: integer
+          format: int64
+    LoyaltyTier:
+      type: object
+      properties:
+        tier:
+          type: string
+        minSpend:
+          type: number
+        pointsMultiplier:
+          type: number
+    ApiStats:
+      type: object
+      properties:
+        uptimeSeconds:
+          type: integer
+          format: int64
+        requests:
+          type: integer
+          format: int64
+        reads:
+          type: integer
+          format: int64
+        writes:
+          type: integer
+          format: int64
+        clientErrors:
+          type: integer
+          format: int64
+        serverErrors:
+          type: integer
+          format: int64
+        avgMs:
+          type: number
+          format: double
+    CdcStatus:
+      type: object
+      properties:
+        running:
+          type: boolean
+        lastUpdate:
+          type: string
+          format: date-time
+        startedAt:
+          type: string
+          format: date-time
+        lastChangeId:
+          type: integer
+          format: int64
+        pendingEvents:
+          type: integer
+          format: int64
+        totalEvents:
+          type: integer
+          format: int64
+        totalUpserts:
+          type: integer
+          format: int64
+        totalDeletes:
+          type: integer
+          format: int64
+        batches:
+          type: integer
+          format: int64
+        lastBatchEvents:
+          type: integer
+          format: int32
+        lastBatchMs:
+          type: integer
+          format: int64
+        lastLatencyMs:
+          type: integer
+          format: int64
+        sybaseCountsAt:
+          type: string
+          format: date-time
+    Cluster:
+      type: object
+      properties:
+        nodes:
+          type: integer
+          format: int32
+        nodeIds:
+          type: array
+          items:
+            type: string
+    Summary:
+      type: object
+      properties:
+        generatedAt:
+          type: string
+          format: date-time
+        cluster:
+          $ref: "#/components/schemas/Cluster"
+        tables:
+          type: array
+          items:
+            $ref: "#/components/schemas/TableSize"
+        totalGridgainRows:
+          type: integer
+          format: int64
+        totalSybaseRows:
+          type: integer
+          format: int64
+        cdc:
+          $ref: "#/components/schemas/CdcStatus"
+        api:
+          $ref: "#/components/schemas/ApiStats"
+    TableSize:
+      type: object
+      properties:
+        name:
+          type: string
+        gridgainRows:
+          type: integer
+          format: int64
+        sybaseRows:
+          type: integer
+          format: int64
+        difference:
+          type: integer
+          format: int64
+    Sample:
+      type: object
+      properties:
+        t:
+          type: integer
+          format: int64
+        apiReqPerSec:
+          type: number
+          format: double
+        apiReadsPerSec:
+          type: number
+          format: double
+        apiWritesPerSec:
+          type: number
+          format: double
+        apiErrorsPerSec:
+          type: number
+          format: double
+        apiAvgMs:
+          type: number
+          format: double
+        cdcEventsPerSec:
+          type: number
+          format: double
+        cdcUpsertsPerSec:
+          type: number
+          format: double
+        cdcDeletesPerSec:
+          type: number
+          format: double
+        cdcPending:
+          type: integer
+          format: int64
+        cdcLatencyMs:
+          type: integer
+          format: int64
+    Series:
+      type: object
+      properties:
+        intervalMs:
+          type: integer
+          format: int32
+        serverTime:
+          type: integer
+          format: int64
+        samples:
+          type: array
+          items:
+            $ref: "#/components/schemas/Sample"
+    PageCustomer:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Customer"
+        limit:
+          type: integer
+          format: int32
+        offset:
+          type: integer
+          format: int32
+        total:
+          type: integer
+          format: int64
+    CustomerScore:
+      type: object
+      properties:
+        customerId:
+          type: integer
+          format: int32
+        churnScore:
+          type: integer
+          format: int32
+        riskBand:
+          type: string
+        scoredAt:
+          type: string
+          format: date-time
+    LoyaltyTransaction:
+      type: object
+      properties:
+        txnId:
+          type: integer
+          format: int32
+        customerId:
+          type: integer
+          format: int32
+        orderId:
+          type: integer
+          format: int32
+        points:
+          type: integer
+          format: int32
+        reason:
+          type: string
+        txnDate:
+          type: string
+          format: date-time
+    PageLoyaltyTransaction:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/LoyaltyTransaction"
+        limit:
+          type: integer
+          format: int32
+        offset:
+          type: integer
+          format: int32
+        total:
+          type: integer
+          format: int64
+    PageInteraction:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Interaction"
+        limit:
+          type: integer
+          format: int32
+        offset:
+          type: integer
+          format: int32
+        total:
+          type: integer
+          format: int64

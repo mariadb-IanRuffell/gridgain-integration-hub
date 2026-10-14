@@ -1,0 +1,17 @@
+    begin tran add_item
+        update product set stock_qty = stock_qty - @qty
+         where product_id = @product_id and stock_qty >= @qty
+
+        if @@rowcount = 0
+        begin
+            rollback tran add_item
+            raiserror 20003 'Insufficient stock'
+            return -3
+        end
+
+        insert order_item (order_id, product_id, qty, unit_price, line_total)
+        values (@order_id, @product_id, @qty, @price, @price * @qty)
+
+        update orders set total_amount = total_amount + (@price * @qty)
+         where order_id = @order_id
+    commit tran add_item

@@ -1,0 +1,26 @@
+== sp_customer_360 vs Customer360Task (every customer, all 6 result sets)
+   PASS sp_customer_360 parity over 251 customers x 6 result sets
+== sp_recalc_loyalty_tier vs RecalcLoyaltyTierTask (every customer)
+   PASS tier returned for 251 customers
+   PASS customer.loyalty_tier identical in both systems afterwards (0 tiers changed by the job)
+== sp_score_customers (cursor) vs ScoreCustomersTask (per-node set-based)
+   PASS band summary (risk_band, customers, avg_score)
+   PASS customer_score identical for all 241 customers (score, band, scored_at)
+== error behaviour: same error number for the same bad input
+   PASS unknown customer: Sybase raises 20002, job returns 20002
+   PASS quantity zero: Sybase raises 20004, job returns 20004
+   PASS unknown product: Sybase raises 20006, job returns 20006
+   PASS insufficient stock: Sybase raises 20003, job returns 20003
+   PASS empty order: Sybase raises 20007, job returns 20007
+   PASS failed orders left product stock untouched
+== sp_create_order + sp_add_order_item + sp_complete_order vs PlaceOrderTask
+   customer 47, items 4:2,17:1,9:3
+   PASS order total
+   PASS line items created
+   PASS payment captured
+   PASS loyalty points earned
+   PASS customer tier/points and product stock identical afterwards
+   tier SILVER -> GOLD, points 77735 -> 100810
+   NOTE: Sybase and GridGain now hold different orders for this test. Resync with: ../cdc/run.sh init
+
+PARITY OK: 16 checks passed, 0 failed

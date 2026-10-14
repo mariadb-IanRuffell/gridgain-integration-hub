@@ -1,0 +1,38 @@
+[
+ {
+  "id": "s1",
+  "text": "From Sybase to GridGain. A two phase migration, demonstrated end to end."
+ },
+ {
+  "id": "s2",
+  "text": "The goal is to move a Sybase application onto GridGain in two phases. In phase one, triggers capture every change in Sybase and a reader streams it into a GridGain cluster, so GridGain holds a live copy while Sybase stays the system of record. In phase two, the stored procedures are re-implemented as GridGain compute jobs, which run on the node that owns the data, behind a REST A P I."
+ },
+ {
+  "id": "s3",
+  "text": "The demo uses a customer three sixty model in Sybase: ten tables, two hundred and fifty customers, and six stored procedures chosen to cover the hard patterns. Reads that return several result sets. Transactions that check stock and award loyalty points. And a cursor that scores every customer for churn risk."
+ },
+ {
+  "id": "s4",
+  "text": "Here is phase one, live. I am placing new orders in Sybase, about five a second, and each order writes around eleven rows. The reader applies them to GridGain within a second, and the backlog stays near zero. When the burst ends, the table sizes in GridGain settle to match Sybase, row for row."
+ },
+ {
+  "id": "s5",
+  "text": "In phase two, each stored procedure became a compute job. To prove they behave identically, a harness runs every Sybase procedure and its GridGain replacement on the same inputs, and compares every value. All two hundred and fifty one customers across six result sets. Tier recalculation. Batch scoring across three nodes. The exact error numbers. And a full order that promotes a customer from silver to gold. Sixteen checks, no differences."
+ },
+ {
+  "id": "s6",
+  "text": "The data lives in a three node cluster, with native persistence. With traffic flowing through the REST A P I, I will kill one node. The cluster drops to two nodes, requests keep succeeding, and nothing is lost. When the node comes back, it rejoins with its own data."
+ },
+ {
+  "id": "s7",
+  "text": "In front of the cluster sits a REST A P I, with a generated Open A P I specification: thirty three operations, covering create, read, update and delete, plus the business operations. Placing an order runs the compute job and returns the points earned and the loyalty tier. And bad input gets a clear error that lists the allowed values."
+ },
+ {
+  "id": "s8",
+  "text": "The dashboard ties it together. Changes in Sybase, and requests through the A P I, both show up as live throughput, alongside the size of every table."
+ },
+ {
+  "id": "s9",
+  "text": "So. Sybase changes flow into GridGain continuously. The procedures run as compute jobs, with identical results. And the cluster survives losing a node."
+ }
+]

@@ -1,0 +1,50 @@
+# 3-node GridGain 8.9.38 Community cluster with native persistence (native arm64/amd64).
+# Thin client / JDBC / thin compute: localhost:10800, 10801, 10802 (one per node).
+# Start with ./cluster.sh up (a persistent cluster must be activated once all nodes have joined).
+x-node: &node
+  image: gridgain/community:8.9.38
+
+services:
+  gridgain1:
+    <<: *node
+    container_name: gridgain1
+    hostname: gridgain1
+    ports: ["10800:10800"]   # thin client port is not EXPOSEd by the image: publish it explicitly
+    environment:
+      - CONFIG_URI=/config/node.xml
+      - JVM_OPTS=-Xms512m -Xmx1536m -XX:+UseG1GC -DIGNITE_QUIET=false -DNODE_NAME=node1
+    volumes:
+      - ./config:/config:ro
+      - ./deploy:/opt/gridgain/libs/external:ro
+      - node1-work:/opt/gridgain/work
+
+  gridgain2:
+    <<: *node
+    container_name: gridgain2
+    hostname: gridgain2
+    ports: ["10801:10800"]
+    environment:
+      - CONFIG_URI=/config/node.xml
+      - JVM_OPTS=-Xms512m -Xmx1536m -XX:+UseG1GC -DIGNITE_QUIET=false -DNODE_NAME=node2
+    volumes:
+      - ./config:/config:ro
+      - ./deploy:/opt/gridgain/libs/external:ro
+      - node2-work:/opt/gridgain/work
+
+  gridgain3:
+    <<: *node
+    container_name: gridgain3
+    hostname: gridgain3
+    ports: ["10802:10800"]
+    environment:
+      - CONFIG_URI=/config/node.xml
+      - JVM_OPTS=-Xms512m -Xmx1536m -XX:+UseG1GC -DIGNITE_QUIET=false -DNODE_NAME=node3
+    volumes:
+      - ./config:/config:ro
+      - ./deploy:/opt/gridgain/libs/external:ro
+      - node3-work:/opt/gridgain/work
+
+volumes:
+  node1-work:
+  node2-work:
+  node3-work:
