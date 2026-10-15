@@ -1,18 +1,18 @@
 [
-  {
-    "cmd": "curl -s localhost:8080/api/v1/customers/72/hub | jq '{customer: .profile[0] | {first_name, last_name, loyalty_tier}, retail: .retail[0], travel: .travel[0], value: .value[0], trips_at_risk: (.at_risk_trips | length)}'",
-    "out": "{\"customer\":{\"first_name\":\"Aisha\",\"last_name\":\"Rossi\",\"loyalty_tier\":\"PLATINUM\"},\"retail\":{\"orders\":15,\"retail_spend\":60670.00},\"travel\":{\"bookings\":2,\"travel_spend\":6070.0,\"miles\":21880},\"value\":{\"loyalty_tier\":\"PLATINUM\",\"loyalty_points\":72632,\"retail_spend\":60670.00,\"travel_spend\":6070.0,\"lifetime_value\":66740.00,\"travel_share_pct\":9.1},\"trips_at_risk\":1}"
-  },
-  {
-    "cmd": "curl -s localhost:8080/api/v1/flights/134/impact | jq '{passengers: (.passengers | length), by_tier, total_suggested_compensation, top: [.passengers[:3][] | {last_name, loyalty_tier, cabin, priority, suggested_compensation}]}'",
-    "out": "{\"passengers\":8,\"by_tier\":[{\"loyalty_tier\":\"GOLD\",\"passengers\":5,\"base_compensation\":9855.00,\"suggested_compensation\":14782.50},{\"loyalty_tier\":\"PLATINUM\",\"passengers\":3,\"base_compensation\":5475.00,\"suggested_compensation\":10950.00}],\"total_suggested_compensation\":25732.50,\"top\":[{\"last_name\":\"Ivanov\",\"loyalty_tier\":\"PLATINUM\",\"cabin\":\"BUSINESS\",\"priority\":429,\"suggested_compensation\":6570.00},{\"last_name\":\"Taylor\",\"loyalty_tier\":\"PLATINUM\",\"cabin\":\"ECONOMY\",\"priority\":419,\"suggested_compensation\":2190.00},{\"last_name\":\"Tanaka\",\"loyalty_tier\":\"PLATINUM\",\"cabin\":\"ECONOMY\",\"priority\":416,\"suggested_compensation\":2190.00}]}"
-  },
-  {
-    "cmd": "curl -s -X POST localhost:8080/api/v1/bookings -H 'Content-Type: application/json' \\\n     -d '{\"customerId\":72,\"flightId\":143,\"cabin\":\"BUSINESS\",\"passenger\":\"Marco Rossi\"}' | jq",
-    "out": "{\"bookingId\":1000002001,\"bookingRef\":\"WNGJNO\",\"customerId\":72,\"flightId\":143,\"cabin\":\"BUSINESS\",\"seatNo\":\"3A\",\"fare\":4552.5,\"milesEarned\":8205}"
-  },
-  {
-    "cmd": "curl -s -X POST localhost:8080/api/v1/bookings -H 'Content-Type: application/json' \\\n     -d '{\"customerId\":72,\"flightId\":143,\"cabin\":\"PREMIUM\",\"passenger\":\"Marco Rossi\"}' | jq -r .detail",
-    "out": "cabin must match \"ECONOMY|BUSINESS|FIRST\""
-  }
+ {
+  "cmd": "curl -s localhost:8080/api/v1/customers/222/hub | jq '{customer: .profile[0] | {first_name, last_name, loyalty_tier}, retail: .retail[0], travel: .travel[0], value: .value[0], trips_at_risk: (.at_risk_trips | length)}'",
+  "out": "{\n  \"customer\": {\n    \"first_name\": \"Ava\",\n    \"last_name\": \"Hassan\",\n    \"loyalty_tier\": \"PLATINUM\"\n  },\n  \"retail\": {\n    \"orders\": 14,\n    \"retail_spend\": 173530.00\n  },\n  \"travel\": {\n    \"bookings\": 5,\n    \"travel_spend\": 11912.5,\n    \"miles\": 42250\n  },\n  \"value\": {\n    \"loyalty_tier\": \"PLATINUM\",\n    \"loyalty_points\": 169530,\n    \"retail_spend\": 173530.00,\n    \"travel_spend\": 11912.5,\n    \"lifetime_value\": 185442.50,\n    \"travel_share_pct\": 6.4\n  },\n  \"trips_at_risk\": 0\n}"
+ },
+ {
+  "cmd": "curl -s localhost:8080/api/v1/flights/134/impact | jq '{passengers: (.passengers | length), by_tier, total_suggested_compensation, top: [.passengers[:3][] | {last_name, loyalty_tier, cabin, priority, suggested_compensation}]}'",
+  "out": "{\n  \"passengers\": 8,\n  \"by_tier\": [\n    {\n      \"loyalty_tier\": \"BLUE\",\n      \"passengers\": 3,\n      \"base_compensation\": 7665.00,\n      \"suggested_compensation\": 7665.00\n    },\n    {\n      \"loyalty_tier\": \"GOLD\",\n      \"passengers\": 5,\n      \"base_compensation\": 7665.00,\n      \"suggested_compensation\": 11497.50\n    }\n  ],\n  \"total_suggested_compensation\": 19162.50,\n  \"top\": [\n    {\n      \"last_name\": \"Ivanov\",\n      \"loyalty_tier\": \"GOLD\",\n      \"cabin\": \"BUSINESS\",\n      \"priority\": 322,\n      \"suggested_compensation\": 4927.50\n    },\n    {\n      \"last_name\": \"Tanaka\",\n      \"loyalty_tier\": \"GOLD\",\n      \"cabin\": \"ECONOMY\",\n      \"priority\": 317,\n      \"suggested_compensation\": 1642.50\n    },\n    {\n      \"last_name\": \"Taylor\",\n      \"loyalty_tier\": \"GOLD\",\n      \"cabin\": \"ECONOMY\",\n      \"priority\": 315,\n      \"suggested_compensation\": 1642.50\n    }\n  ]\n}"
+ },
+ {
+  "cmd": "curl -s -X POST localhost:8080/api/v1/bookings -H 'Content-Type: application/json' \\\n     -d '{\"customerId\":222,\"flightId\":143,\"cabin\":\"BUSINESS\",\"passenger\":\"Ava Hassan\"}' | jq -c .",
+  "out": "{\"bookingId\":1000000007,\"bookingRef\":\"VNLMYO\",\"customerId\":222,\"flightId\":143,\"cabin\":\"BUSINESS\",\"seatNo\":\"3A\",\"fare\":4552.5,\"milesEarned\":8205}"
+ },
+ {
+  "cmd": "curl -s -X POST localhost:8080/api/v1/bookings -H 'Content-Type: application/json' \\\n     -d '{\"customerId\":222,\"flightId\":143,\"cabin\":\"PREMIUM\",\"passenger\":\"Ava Hassan\"}' | jq -r .detail",
+  "out": "cabin must match \"ECONOMY|BUSINESS|FIRST\""
+ }
 ]

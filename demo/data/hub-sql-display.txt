@@ -1,20 +1,20 @@
 -- 1. Lifetime value: retail (Sybase) + travel (Oracle) per customer
 id   last_name  tier            retail      travel     lifetime
-222  Hassan     PLATINUM    230,230.00   11,912.50   242,142.50
-6    Sato       PLATINUM    223,250.00        0.00   223,250.00
-58   Siddiqui   PLATINUM    203,205.00    4,570.00   207,775.00
-27   Siddiqui   PLATINUM    205,300.00        0.00   205,300.00
-165  Singh      PLATINUM    199,445.00    2,197.50   201,642.50
-220  Khan       PLATINUM    194,315.00    5,625.00   199,940.00
-(6 of 10 rows shown, 24 ms)
+222  Hassan     PLATINUM    173,530.00   11,912.50   185,442.50
+243  Wilson     PLATINUM    151,345.00   10,992.50   162,337.50
+217  Garcia     PLATINUM    149,700.00   10,317.50   160,017.50
+114  Sato       PLATINUM    149,560.00        0.00   149,560.00
+6    Sato       GOLD        142,800.00        0.00   142,800.00
+220  Khan       PLATINUM    129,250.00    5,625.00   134,875.00
+(6 of 10 rows shown, 36 ms)
  
 -- 3. Proactive service: negative interaction (Sybase) on a delayed or cancelled flight (Oracle)
-id   last_name tier      interaction     flight   route    departs     status    delay
-72   Rossi    PLATINUM  COMPLAINT       XA1103   DXB-LHR  2026-10-23  DELAYED   300
-162  Novak    PLATINUM  ENQUIRY         XA1106   DXB-LHR  2026-10-23  DELAYED   300
-85   Chen     GOLD      COMPLAINT       XA405    DXB-KHI  2026-11-12  DELAYED   300
-42   Farouk   SILVER    COMPLAINT       XA1302   DXB-JNB  2026-11-15  DELAYED   300
-124  Walker   GOLD      COMPLAINT       XA1401   DXB-NRT  2026-11-24  CANCELLED 0
-124  Walker   GOLD      COMPLAINT       XA1401   DXB-NRT  2026-11-24  CANCELLED 0
-124  Walker   GOLD      BOOKING_CHANGE  XA1401   DXB-NRT  2026-11-24  CANCELLED 0
-(7 of 12 rows shown, 7 ms)
+id   last_name  tier      interaction     flight   route    departs     status    delay
+72   Rossi      GOLD      COMPLAINT       XA1103   DXB-LHR  2026-10-23  DELAYED   300
+162  Novak      GOLD      ENQUIRY         XA1106   DXB-LHR  2026-10-23  DELAYED   300
+85   Chen       BLUE      COMPLAINT       XA405    DXB-KHI  2026-11-12  DELAYED   300
+42   Farouk     SILVER    COMPLAINT       XA1302   DXB-JNB  2026-11-15  DELAYED   300
+124  Walker     BLUE      COMPLAINT       XA1401   DXB-NRT  2026-11-24  CANCELLED 0
+124  Walker     BLUE      BOOKING_CHANGE  XA1401   DXB-NRT  2026-11-24  CANCELLED 0
+124  Walker     BLUE      COMPLAINT       XA1401   DXB-NRT  2026-11-24  CANCELLED 0
+(7 of 12 rows shown, 14 ms)

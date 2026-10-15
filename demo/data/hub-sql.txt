@@ -1,69 +1,69 @@
 
 == 1. Lifetime value: retail spend (Sybase) + travel spend (Oracle) per customer
 customer_id       last_name         loyalty_tier      retail_spend      travel_spend      lifetime_value    
-222               Hassan            PLATINUM          230230.00         11912.5           242142.50         
-6                 Sato              PLATINUM          223250.00         0                 223250.00         
-58                Siddiqui          PLATINUM          203205.00         4570.0            207775.00         
-27                Siddiqui          PLATINUM          205300.00         0                 205300.00         
-165               Singh             PLATINUM          199445.00         2197.5            201642.50         
-220               Khan              PLATINUM          194315.00         5625.0            199940.00         
-114               Sato              PLATINUM          197950.00         0                 197950.00         
-240               Nasser            PLATINUM          194075.00         3500              197575.00         
-190               Thomas            PLATINUM          165440.00         26110             191550.00         
-243               Wilson            PLATINUM          178805.00         10992.5           189797.50         
-(10 rows, 24 ms)
+222               Hassan            PLATINUM          173530.00         11912.5           185442.50         
+243               Wilson            PLATINUM          151345.00         10992.5           162337.50         
+217               Garcia            PLATINUM          149700.00         10317.5           160017.50         
+114               Sato              PLATINUM          149560.00         0                 149560.00         
+6                 Sato              GOLD              142800.00         0                 142800.00         
+220               Khan              PLATINUM          129250.00         5625.0            134875.00         
+27                Siddiqui          PLATINUM          127730.00         0                 127730.00         
+53                Chen              PLATINUM          124720.00         0                 124720.00         
+63                Ivanov            PLATINUM          123800.00         0                 123800.00         
+136               Brown             GOLD              118320.00         5312.5            123632.50         
+(10 rows, 36 ms)
 
 == 2. Where the money comes from, by loyalty tier (a Sybase attribute) across both systems
 loyalty_tier      customers         retail_total      travel_total      travel_pct        
-PLATINUM          156               18463185.00       1117262.5         5.7               
-GOLD              85                5159900.00        684095.0          11.7              
-SILVER            9                 258135.00         94285.0           26.8              
-BLUE              1                 10900.00          5860              35.0              
+GOLD              82                4514530.00        885142.5          16.4              
+PLATINUM          30                3054965.00        163707.5          5.1               
+BLUE              85                1745915.00        515625.0          22.8              
+SILVER            53                1688790.00        337027.5          16.6              
 (4 rows, 14 ms)
 
 == 3. Proactive service: customers with a recent negative interaction (Sybase) who are booked on a delayed or cancelled upcoming flight (Oracle)
 customer_id       last_name         loyalty_tier      interaction_type  subject           flight_no         origin            destination       dep_time          flight_status     delay_minutes     
-72                Rossi             PLATINUM          COMPLAINT         Delayed baggage   XA1103            DXB               LHR               2026-10-23 01:15: DELAYED           300               
-162               Novak             PLATINUM          ENQUIRY           Upgrade options   XA1106            DXB               LHR               2026-10-23 15:15: DELAYED           300               
-85                Chen              GOLD              COMPLAINT         Delayed baggage   XA405             DXB               KHI               2026-11-12 01:00: DELAYED           300               
-42                Farouk            SILVER            COMPLAINT         Seat not as booke XA1302            DXB               JNB               2026-11-15 05:45: DELAYED           300               
-124               Walker            GOLD              COMPLAINT         Seat not as booke XA1401            DXB               NRT               2026-11-24 12:30: CANCELLED         0                 
-124               Walker            GOLD              COMPLAINT         Flight delay comp XA1401            DXB               NRT               2026-11-24 12:30: CANCELLED         0                 
-124               Walker            GOLD              BOOKING_CHANGE    Cancel booking    XA1401            DXB               NRT               2026-11-24 12:30: CANCELLED         0                 
-107               Thomas            GOLD              ENQUIRY           Visa requirements XA906             DXB               FRA               2026-11-26 23:15: DELAYED           240               
-163               Sharma            PLATINUM          COMPLAINT         Flight delay comp XA1205            DXB               SIN               2026-12-10 13:30: DELAYED           600               
-184               Taylor            PLATINUM          BOOKING_CHANGE    Name correction   XA1205            DXB               SIN               2026-12-10 13:30: DELAYED           600               
-184               Taylor            PLATINUM          ENQUIRY           Baggage allowance XA1205            DXB               SIN               2026-12-10 13:30: DELAYED           600               
-202               Singh             GOLD              FEEDBACK          Booking site feed XA1205            DXB               SIN               2026-12-10 13:30: DELAYED           600               
-(12 rows, 7 ms)
+72                Rossi             GOLD              COMPLAINT         Delayed baggage   XA1103            DXB               LHR               2026-10-23 02:15: DELAYED           300               
+162               Novak             GOLD              ENQUIRY           Upgrade options   XA1106            DXB               LHR               2026-10-23 16:15: DELAYED           300               
+85                Chen              BLUE              COMPLAINT         Delayed baggage   XA405             DXB               KHI               2026-11-12 02:00: DELAYED           300               
+42                Farouk            SILVER            COMPLAINT         Seat not as booke XA1302            DXB               JNB               2026-11-15 06:45: DELAYED           300               
+124               Walker            BLUE              COMPLAINT         Seat not as booke XA1401            DXB               NRT               2026-11-24 13:30: CANCELLED         0                 
+124               Walker            BLUE              BOOKING_CHANGE    Cancel booking    XA1401            DXB               NRT               2026-11-24 13:30: CANCELLED         0                 
+124               Walker            BLUE              COMPLAINT         Flight delay comp XA1401            DXB               NRT               2026-11-24 13:30: CANCELLED         0                 
+107               Thomas            BLUE              ENQUIRY           Visa requirements XA906             DXB               FRA               2026-11-27 00:15: DELAYED           240               
+163               Sharma            GOLD              COMPLAINT         Flight delay comp XA1205            DXB               SIN               2026-12-10 14:30: DELAYED           600               
+184               Taylor            GOLD              ENQUIRY           Baggage allowance XA1205            DXB               SIN               2026-12-10 14:30: DELAYED           600               
+184               Taylor            GOLD              BOOKING_CHANGE    Name correction   XA1205            DXB               SIN               2026-12-10 14:30: DELAYED           600               
+202               Singh             BLUE              FEEDBACK          Booking site feed XA1205            DXB               SIN               2026-12-10 14:30: DELAYED           600               
+(12 rows, 14 ms)
 
 == 4. Top routes for GOLD and PLATINUM customers (tier from Sybase, routes from Oracle)
 origin            destination       segments          fare_total        
-DXB               LAX               32                154000            
-LAX               DXB               30                147000            
-JFK               DXB               32                127600            
-SYD               DXB               22                116920            
-DXB               JFK               25                101500            
-LHR               DXB               28                80427.5           
-DXB               SYD               19                79000             
-DXB               CDG               32                77380             
-CDG               DXB               30                74460             
-DXB               NRT               25                72590             
-(10 rows, 5 ms)
+DXB               LAX               24                112000            
+LAX               DXB               21                94500             
+SYD               DXB               14                79000             
+JFK               DXB               18                75400             
+DXB               JFK               15                66700             
+CDG               DXB               20                48180             
+JNB               DXB               16                43750             
+DXB               SYD               11                41080             
+LHR               DXB               18                40972.5           
+DXB               LHR               17                39455.0           
+(10 rows, 7 ms)
 
 == 5. Cross-sell list: big retail spenders (Sybase) who have never booked a flight (Oracle)
 customer_id       last_name         loyalty_tier      email             retail_spend      
-6                 Sato              PLATINUM          hugo.sato167@exam 223250.00         
-27                Siddiqui          PLATINUM          ananya.siddiqui90 205300.00         
-114               Sato              PLATINUM          noor.sato832@exam 197950.00         
-63                Ivanov            PLATINUM          marco.ivanov812@e 164760.00         
-167               Wright            PLATINUM          mei.wright465@exa 160650.00         
-34                Roberts           PLATINUM          olivia.roberts164 158040.00         
-199               Siddiqui          PLATINUM          khalid.siddiqui95 156075.00         
-7                 Novak             PLATINUM          james.novak389@ex 155695.00         
-11                Ali               PLATINUM          noah.ali882@examp 148735.00         
-84                Wright            PLATINUM          lucas.wright858@e 135420.00         
-(10 rows, 8 ms)
+114               Sato              PLATINUM          noor.sato832@exam 149560.00         
+6                 Sato              GOLD              hugo.sato167@exam 142800.00         
+27                Siddiqui          PLATINUM          ananya.siddiqui90 127730.00         
+63                Ivanov            PLATINUM          marco.ivanov812@e 123800.00         
+167               Wright            GOLD              mei.wright465@exa 117700.00         
+7                 Novak             PLATINUM          james.novak389@ex 103515.00         
+34                Roberts           PLATINUM          olivia.roberts164 81780.00          
+88                Martin            BLUE              daniel.martin666@ 74170.00          
+211               Ali               GOLD              olivia.ali330@exa 63360.00          
+223               Siddiqui          PLATINUM          mei.siddiqui307@e 63260.00          
+(10 rows, 9 ms)
 
 == 6. Disruption cost by tier: compensation owed (Oracle) against how loyal the affected customers are (Sybase)
 loyalty_tier      compensated_segmentscompensation_total
