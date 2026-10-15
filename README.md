@@ -59,7 +59,7 @@ Sybase ASE --triggers--> cdc_change_log --poll--> cdc/ (Java) --MERGE/DELETE--> 
   Sybase and MERGEs it into GridGain (or DELETEs if the row is gone). Because it applies state rather than
   operations, replays are harmless; the offset is committed only after GridGain has the data.
 - **GridGain** (3-node persistent cluster, see "GridGain cluster" below; image `gridgain/community:8.9.38`, native arm64):
-  tables from `cdc/src/main/resources/gridgain-schema.sql`. Customer-owned tables are colocated on
+  tables from `cdc/src/main/resources/gridgain-schema-sybase.sql`. Customer-owned tables are colocated on
   `customer_id`; `order_item`/`payment` carry a denormalised `customer_id` (resolved through `orders`);
   `product` and `loyalty_tier_rule` are replicated. This is the layout Phase 2 compute jobs will use.
 
@@ -379,7 +379,7 @@ tried are in [sybase/docker/README.md](sybase/docker/README.md).
 - Thin-client compute is off by default (`maxActiveComputeTasksPerConnection` = 0).
 - A cache transaction cannot touch ATOMIC caches, and the first use of an atomic sequence starts a system
   cache, which is not allowed inside a transaction: allocate ids before `txStart`.
-- The CDC reader runs from `target/classes`; after editing `gridgain-schema.sql` rebuild (`mvn package`) or the
+- The CDC reader runs from `target/classes`; after editing `gridgain-schema-sybase.sql` rebuild (`mvn package`) or the
   old DDL is used.
 
 ## Oracle gotchas hit so far

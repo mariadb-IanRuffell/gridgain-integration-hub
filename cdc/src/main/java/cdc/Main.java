@@ -42,7 +42,7 @@ public final class Main {
     private static CdcSource open(String source, String ggUrl) throws SQLException {
         switch (source) {
             case "sybase":
-                return new Cdc(env("ASE_URL", "jdbc:jtds:sybase://llama.local:5000/testdb"), env("ASE_USER", "tester"),
+                return new SybaseCdc(env("ASE_URL", "jdbc:jtds:sybase://llama.local:5000/testdb"), env("ASE_USER", "tester"),
                     env("ASE_PASSWORD", "guest1234"), ggUrl);
             case "oracle":
                 return new OracleCdc(env("ORA_URL", "jdbc:oracle:thin:@//localhost:1521/FREEPDB1"), env("ORA_USER", "travel"),

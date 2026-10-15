@@ -1,4 +1,4 @@
--- GridGain 8.9 tables for the ORACLE travel/reservations system (the Sybase tables are in gridgain-schema.sql).
+-- GridGain 8.9 tables for the ORACLE travel/reservations system (the Sybase tables are in gridgain-schema-sybase.sql).
 -- bookings, segments and compensation are colocated on customer_id, exactly like the Sybase customer data, so a join
 -- between the two systems' data (customer x booking x segment) runs on one node with no data movement.
 -- booking_segment and compensation carry a denormalised customer_id (resolved by the reader via booking).

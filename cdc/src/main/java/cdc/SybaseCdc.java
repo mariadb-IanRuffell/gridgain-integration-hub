@@ -26,7 +26,7 @@ import java.util.Set;
  * operations) makes every batch idempotent, so the offset is committed only after GridGain has the
  * data and a crash simply replays the last batch (at-least-once delivery, effectively-once result).
  */
-final class Cdc implements CdcSource {
+final class SybaseCdc implements CdcSource {
     static final String CONSUMER = "gridgain";
     private static final int IN_CHUNK = 500;
     private static final int BATCH = 1000;
@@ -34,7 +34,7 @@ final class Cdc implements CdcSource {
     private final String aseUrl, aseUser, asePass, ggUrl;
     private Connection ase, gg;
 
-    Cdc(String aseUrl, String aseUser, String asePass, String ggUrl) throws SQLException {
+    SybaseCdc(String aseUrl, String aseUser, String asePass, String ggUrl) throws SQLException {
         this.aseUrl = aseUrl; this.aseUser = aseUser; this.asePass = asePass; this.ggUrl = ggUrl;
         connect();
     }
@@ -76,7 +76,7 @@ final class Cdc implements CdcSource {
     public void init() throws Exception {
         try (Statement st = gg.createStatement()) {
             for (TableSpec t : Tables.ALL) st.execute("DROP TABLE IF EXISTS " + t.name);
-            for (String ddl : readResource("/gridgain-schema.sql").split(";")) {
+            for (String ddl : readResource("/gridgain-schema-sybase.sql").split(";")) {
                 if (!stripComments(ddl).isBlank()) st.execute(ddl);
             }
         }
@@ -287,7 +287,7 @@ final class Cdc implements CdcSource {
     }
 
     private static String readResource(String path) throws java.io.IOException {
-        try (var in = Cdc.class.getResourceAsStream(path)) {
+        try (var in = SybaseCdc.class.getResourceAsStream(path)) {
             return new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
         }
     }
