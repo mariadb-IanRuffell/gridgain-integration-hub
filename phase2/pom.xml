@@ -27,6 +27,12 @@
       <artifactId>ignite-core</artifactId>
       <version>${gridgain.version}</version>
     </dependency>
+    <!-- Oracle JDBC: only used by the client-side parity harness, never loaded on the server. -->
+    <dependency>
+      <groupId>com.oracle.database.jdbc</groupId>
+      <artifactId>ojdbc11</artifactId>
+      <version>23.5.0.24.07</version>
+    </dependency>
     <!-- Sybase JDBC: only used by the client-side parity harness, never loaded on the server. -->
     <dependency>
       <groupId>net.sourceforge.jtds</groupId>

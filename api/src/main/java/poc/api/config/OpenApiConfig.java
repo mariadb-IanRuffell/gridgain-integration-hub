@@ -17,8 +17,9 @@ public class OpenApiConfig {
                 .title("Customer 360 API")
                 .version("1.0.0")
                 .description("""
-                    CRUD and business operations over the Customer 360 data held in a GridGain 8.9 cluster
-                    (replicated from Sybase ASE by CDC during the phased migration).
+                    CRUD and business operations over two source systems consolidated in a GridGain 8.9 data hub:
+                    customer / order / loyalty data from Sybase ASE and travel / reservation data from Oracle, both replicated by CDC
+                    and joinable on customer_id (hub endpoints).
 
                     * Resource endpoints read and write GridGain tables through SQL.
                     * Business operations (`360`, `recalculate`, `scoring`, `POST /orders`) call the GridGain compute
@@ -38,6 +39,10 @@ public class OpenApiConfig {
                 new Tag().name("Interactions").description("Customer service interactions (nested under a customer)"),
                 new Tag().name("Loyalty").description("Loyalty tiers, points ledger and churn score (read-only data)"),
                 new Tag().name("Operations").description("Business operations implemented as GridGain compute jobs"),
+                new Tag().name("Airports").description("Airport reference data (Oracle travel system)"),
+                new Tag().name("Flights").description("Flight schedule, seat inventory and operations: delay, cancel (Oracle travel system)"),
+                new Tag().name("Bookings").description("Reservations. Booking and cancelling run the compute jobs that replaced the PL/SQL procedures"),
+                new Tag().name("Hub").description("Endpoints that combine BOTH source systems (Sybase customers x Oracle travel) plus disruption processing"),
                 new Tag().name("Dashboard").description("Data behind the live dashboard page at /dashboard.html")));
     }
 }

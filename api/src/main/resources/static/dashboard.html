@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Customer 360 · GridGain dashboard</title>
+<title>Data hub · GridGain dashboard</title>
 <style>
   :root {
     --bg: #f4f6f9; --card: #ffffff; --ink: #1c2430; --muted: #6b7686; --line: #e3e8ef; --grid: #edf0f5;
@@ -46,6 +46,9 @@
   td.bar { width: 34%; padding-left: 14px; }
   .barbg { background: var(--bar); height: 10px; border-radius: 5px; }
   .barfg { background: var(--c1); height: 10px; border-radius: 5px; min-width: 2px; }
+  .barfg.oracle { background: var(--c4); }
+  td.src { text-align: left; font-size: 12.5px; color: var(--muted); }
+  td.src-oracle { color: var(--c4); } td.src-sybase { color: var(--c1); }
   .delta-0 { color: var(--ok); } .delta-pos { color: var(--warn); } .delta-neg { color: var(--bad); }
   .tools { display: flex; flex-wrap: wrap; gap: 10px 20px; align-items: center; }
   select, button { font: inherit; padding: 4px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--ink); }
@@ -60,11 +63,12 @@
 <header>
   <div>
     <h1>Customer 360 · live dashboard</h1>
-    <div class="sub">Sybase ASE → GridGain via CDC, and the REST API in front of GridGain · <a href="/swagger-ui.html">API docs</a></div>
+    <div class="sub">Sybase ASE + Oracle → GridGain via CDC, and the REST API in front of the hub · <a href="/swagger-ui.html">API docs</a></div>
   </div>
   <div class="pills">
     <span class="pill" id="pill-cluster"><i></i>cluster …</span>
-    <span class="pill" id="pill-cdc"><i></i>CDC …</span>
+    <span class="pill" id="pill-cdc-sybase"><i></i>CDC Sybase …</span>
+    <span class="pill" id="pill-cdc-oracle"><i></i>CDC Oracle …</span>
     <span class="pill" id="pill-api"><i></i>API …</span>
   </div>
 </header>
@@ -72,17 +76,17 @@
 <main>
   <section class="kpis">
     <div class="card kpi"><div class="label">Rows in GridGain</div><div class="value" id="k-rows">–</div><div class="note" id="k-rows-n">&nbsp;</div></div>
-    <div class="card kpi"><div class="label">CDC events applied</div><div class="value" id="k-cdc">–</div><div class="note" id="k-cdc-n">&nbsp;</div></div>
-    <div class="card kpi"><div class="label">CDC backlog</div><div class="value" id="k-lag">–</div><div class="note" id="k-lag-n">&nbsp;</div></div>
+    <div class="card kpi"><div class="label">CDC events applied (both sources)</div><div class="value" id="k-cdc">–</div><div class="note" id="k-cdc-n">&nbsp;</div></div>
+    <div class="card kpi"><div class="label">CDC backlog (both sources)</div><div class="value" id="k-lag">–</div><div class="note" id="k-lag-n">&nbsp;</div></div>
     <div class="card kpi"><div class="label">REST requests</div><div class="value" id="k-api">–</div><div class="note" id="k-api-n">&nbsp;</div></div>
     <div class="card kpi"><div class="label">REST latency (avg)</div><div class="value" id="k-lat">–</div><div class="note" id="k-lat-n">&nbsp;</div></div>
   </section>
 
   <section class="card">
     <h2>Table sizes</h2>
-    <div class="sub" id="tbl-note" style="margin-bottom:6px">Row counts in GridGain, compared with the Sybase counts last taken by the CDC reader.</div>
+    <div class="sub" id="tbl-note" style="margin-bottom:6px">Row counts in GridGain, compared with the counts last taken in each source system by its CDC reader.</div>
     <table>
-      <thead><tr><th>Table</th><th>GridGain rows</th><th>Sybase rows</th><th>Δ</th><th class="bar" style="text-align:left">Share of GridGain rows</th></tr></thead>
+      <thead><tr><th>Table</th><th>Source</th><th>GridGain rows</th><th>Source rows</th><th>Δ</th><th class="bar" style="text-align:left">Share of GridGain rows</th></tr></thead>
       <tbody id="tbl"></tbody>
     </table>
   </section>
@@ -95,12 +99,12 @@
       <select id="rate"><option value="0">off</option><option value="5">5 req/s</option><option value="20">20 req/s</option><option value="50">50 req/s</option><option value="100">100 req/s</option></select>
     </label>
     <span class="sub" id="gen-note"></span>
-    <span class="sub" style="margin-left:auto">Generate CDC load from the project folder: <code>./sybase/gen-load.sh 60 100</code> (60 s, 100 row touches/s) or <code>./sybase/gen-load.sh --orders 60 5</code> (60 s, 5 new orders/s)</span>
+    <span class="sub" style="margin-left:auto">Generate CDC load from the project folder, Sybase: <code>./sybase/gen-load.sh --orders 60 5</code> (5 new orders/s) or <code>./sybase/gen-load.sh 60 100</code> (100 row touches/s) · Oracle: <code>./oracle/gen-load.sh 60 5</code> (5 bookings/s)</span>
   </section>
 
   <section class="grid2">
-    <div class="card"><h2>CDC throughput</h2><div class="sub">changes applied to GridGain per second</div><div class="legend" id="lg-cdc"></div><canvas id="ch-cdc"></canvas></div>
-    <div class="card"><h2>CDC backlog &amp; latency</h2><div class="sub">changes waiting in Sybase · age of the oldest change in the last batch (approx., compares two clocks)</div><div class="legend" id="lg-lag"></div><canvas id="ch-lag"></canvas></div>
+    <div class="card"><h2>CDC throughput</h2><div class="sub">changes applied to GridGain per second, by source system</div><div class="legend" id="lg-cdc"></div><canvas id="ch-cdc"></canvas></div>
+    <div class="card"><h2>CDC backlog &amp; latency</h2><div class="sub">changes waiting in each source · age of the oldest change in the last batch (approx., compares two clocks)</div><div class="legend" id="lg-lag"></div><canvas id="ch-lag"></canvas></div>
     <div class="card"><h2>REST throughput</h2><div class="sub">business API calls per second (dashboard polling excluded)</div><div class="legend" id="lg-api"></div><canvas id="ch-api"></canvas></div>
     <div class="card"><h2>REST latency &amp; errors</h2><div class="sub">average latency per interval · 4xx/5xx responses per second</div><div class="legend" id="lg-lat"></div><canvas id="ch-lat"></canvas></div>
   </section>
@@ -176,12 +180,15 @@ function fmtAxis(v) { return v >= 1000 ? (v / 1000).toFixed(v >= 10000 ? 0 : 1) 
 const rate = u => v => fmtRate(v) + " " + u;
 const charts = [
   new Chart($("ch-cdc"), $("lg-cdc"), [
-    { key: "cdcEventsPerSec", label: "events/s", color: "--c1", fmt: rate("/s") },
-    { key: "cdcUpsertsPerSec", label: "upserts/s", color: "--c2", fmt: rate("/s") },
-    { key: "cdcDeletesPerSec", label: "deletes/s", color: "--c3", fmt: rate("/s") }]),
+    { key: "cdcEventsPerSec", label: "Sybase events/s", color: "--c1", fmt: rate("/s") },
+    { key: "oraEventsPerSec", label: "Oracle events/s", color: "--c4", fmt: rate("/s") },
+    { key: "cdcDeletesPerSec", label: "Sybase deletes/s", color: "--c3", fmt: rate("/s") },
+    { key: "oraDeletesPerSec", label: "Oracle deletes/s", color: "--c2", fmt: rate("/s") }]),
   new Chart($("ch-lag"), $("lg-lag"), [
-    { key: "cdcPending", label: "backlog (events)", color: "--c4", fmt: v => fmtInt(v) },
-    { key: "cdcLatencyMs", label: "latency (right axis)", color: "--c1", axis: "r", fmt: v => fmtInt(v) + " ms" }]),
+    { key: "cdcPending", label: "Sybase backlog", color: "--c1", fmt: v => fmtInt(v) },
+    { key: "oraPending", label: "Oracle backlog", color: "--c4", fmt: v => fmtInt(v) },
+    { key: "cdcLatencyMs", label: "Sybase latency (right axis)", color: "--c3", axis: "r", fmt: v => fmtInt(v) + " ms" },
+    { key: "oraLatencyMs", label: "Oracle latency (right axis)", color: "--c2", axis: "r", fmt: v => fmtInt(v) + " ms" }]),
   new Chart($("ch-api"), $("lg-api"), [
     { key: "apiReqPerSec", label: "requests/s", color: "--c1", fmt: rate("/s") },
     { key: "apiReadsPerSec", label: "reads/s", color: "--c2", fmt: rate("/s") },
@@ -211,16 +218,21 @@ async function pollSummary() {
   if (!s || !s.api) return;
   pill("pill-api", "ok", "API up " + (s.api.uptimeSeconds < 120 ? s.api.uptimeSeconds + " s" : Math.round(s.api.uptimeSeconds / 60) + " min"));
   pill("pill-cluster", s.cluster.nodes >= 3 ? "ok" : s.cluster.nodes > 0 ? "warn" : "bad", s.cluster.nodes + " GridGain node" + (s.cluster.nodes === 1 ? "" : "s") + " online");
-  const c = s.cdc;
-  if (!c) pill("pill-cdc", "bad", "CDC: no data (reader never ran)");
-  else pill("pill-cdc", c.running ? "ok" : "bad", c.running ? "CDC running" : "CDC stopped (last seen " + ago(c.lastUpdate) + ")");
+  const cdc = {}; (s.cdc || []).forEach(c => { cdc[c.source] = c; });
+  for (const [src, label] of [["sybase", "Sybase"], ["oracle", "Oracle"]]) {
+    const c = cdc[src], id = "pill-cdc-" + src;
+    if (!c) pill(id, "bad", "CDC " + label + ": no data (reader never ran)");
+    else pill(id, c.running ? "ok" : "bad", c.running ? "CDC " + label + " running" : "CDC " + label + " stopped (last seen " + ago(c.lastUpdate) + ")");
+  }
+  const all = Object.values(cdc), sum = f => all.reduce((a, c) => a + f(c), 0);
+  const sy = cdc.sybase, or = cdc.oracle;
 
   $("k-rows").textContent = fmtInt(s.totalGridgainRows);
-  $("k-rows-n").textContent = s.totalSybaseRows != null ? "Sybase: " + fmtInt(s.totalSybaseRows) : "Sybase count pending";
-  $("k-cdc").textContent = c ? fmtInt(c.totalEvents) : "–";
-  $("k-cdc-n").textContent = c ? `${fmtInt(c.totalUpserts)} upserts · ${fmtInt(c.totalDeletes)} deletes` : "";
-  $("k-lag").textContent = c ? fmtInt(c.pendingEvents) : "–";
-  $("k-lag-n").textContent = c ? `last batch ${fmtInt(c.lastBatchEvents)} events in ${fmtInt(c.lastBatchMs)} ms` : "";
+  $("k-rows-n").textContent = s.totalSourceRows != null ? "sources: " + fmtInt(s.totalSourceRows) : "source counts pending";
+  $("k-cdc").textContent = all.length ? fmtInt(sum(c => c.totalEvents)) : "–";
+  $("k-cdc-n").textContent = all.length ? `Sybase ${fmtInt(sy ? sy.totalEvents : 0)} · Oracle ${fmtInt(or ? or.totalEvents : 0)}` : "";
+  $("k-lag").textContent = all.length ? fmtInt(sum(c => c.pendingEvents)) : "–";
+  $("k-lag-n").textContent = all.length ? `Sybase ${fmtInt(sy ? sy.pendingEvents : 0)} · Oracle ${fmtInt(or ? or.pendingEvents : 0)}` : "";
   $("k-api").textContent = fmtInt(s.api.requests);
   $("k-api-n").textContent = `${fmtInt(s.api.reads)} reads · ${fmtInt(s.api.writes)} writes · ${fmtInt(s.api.clientErrors + s.api.serverErrors)} errors`;
   $("k-lat").textContent = s.api.requests ? s.api.avgMs.toFixed(1) + " ms" : "–";
@@ -229,12 +241,12 @@ async function pollSummary() {
   const max = Math.max(1, ...s.tables.map(t => t.gridgainRows));
   $("tbl").innerHTML = s.tables.map(t => {
     const d = t.difference, cls = d == null ? "" : d === 0 ? "delta-0" : d > 0 ? "delta-pos" : "delta-neg";
-    return `<tr><td>${t.name}</td><td>${fmtInt(t.gridgainRows)}</td><td>${fmtInt(t.sybaseRows)}</td>` +
+    return `<tr><td>${t.name}</td><td class="src src-${t.source}">${t.source === "oracle" ? "Oracle" : "Sybase"}</td><td>${fmtInt(t.gridgainRows)}</td><td>${fmtInt(t.sourceRows)}</td>` +
       `<td class="${cls}">${d == null ? "–" : d === 0 ? "in sync" : (d > 0 ? "+" : "") + fmtInt(d)}</td>` +
-      `<td class="bar"><div class="barbg"><div class="barfg" style="width:${t.gridgainRows / max * 100}%"></div></div></td></tr>`;
+      `<td class="bar"><div class="barbg"><div class="barfg ${t.source}" style="width:${t.gridgainRows / max * 100}%"></div></div></td></tr>`;
   }).join("");
-  $("tbl-note").textContent = "Row counts in GridGain, compared with the Sybase counts last taken by the CDC reader" +
-    (c && c.sybaseCountsAt ? " (" + ago(c.sybaseCountsAt) + ")" : "") + ". A positive Δ means GridGain has rows Sybase does not (for example rows created through the REST API), or the Sybase count is a few seconds behind while changes are streaming in.";
+  $("tbl-note").textContent = "Row counts in GridGain, compared with the counts last taken in each source system by its CDC reader" +
+    (s.sourceCountsAt ? " (" + ago(s.sourceCountsAt) + ")" : "") + ". A positive Δ means GridGain has rows the source does not (for example rows created through the REST API), or the source count is a few seconds behind while changes are streaming in.";
 }
 
 /* ---------------- REST read-traffic generator ---------------- */
@@ -245,7 +257,9 @@ function genTick() {
   while (acc >= 1 && inflight < 40) {
     acc -= 1; inflight++;
     const id = 1 + Math.floor(Math.random() * 250), r = Math.random();
-    const url = r < .55 ? `/api/v1/customers/${id}` : r < .70 ? `/api/v1/customers/${id}/360` : r < .85 ? `/api/v1/orders?customerId=${id}&limit=5` : `/api/v1/products?limit=5`;
+    const url = r < .22 ? `/api/v1/customers/${id}` : r < .32 ? `/api/v1/customers/${id}/360` : r < .42 ? `/api/v1/orders?customerId=${id}&limit=5`
+      : r < .52 ? `/api/v1/products?limit=5` : r < .68 ? `/api/v1/customers/${id}/hub` : r < .80 ? `/api/v1/customers/${id}/trips`
+      : r < .90 ? `/api/v1/bookings?customerId=${id}&limit=5` : `/api/v1/flights?limit=5`;
     fetch(url).then(x => { sent++; if (!x.ok && x.status !== 404) failed++; }).catch(() => failed++).finally(() => { inflight--; });
   }
   if (acc > 20) acc = 0;

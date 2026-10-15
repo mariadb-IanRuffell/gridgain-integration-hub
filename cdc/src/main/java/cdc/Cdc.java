@@ -26,12 +26,10 @@ import java.util.Set;
  * operations) makes every batch idempotent, so the offset is committed only after GridGain has the
  * data and a crash simply replays the last batch (at-least-once delivery, effectively-once result).
  */
-final class Cdc implements AutoCloseable {
+final class Cdc implements CdcSource {
     static final String CONSUMER = "gridgain";
     private static final int IN_CHUNK = 500;
     private static final int BATCH = 1000;
-
-    record Result(int events, int upserts, int deletes, long lastChangeId, long oldestChangeMs, long durationMs) {}
 
     private final String aseUrl, aseUser, asePass, ggUrl;
     private Connection ase, gg;
@@ -43,9 +41,22 @@ final class Cdc implements AutoCloseable {
 
     Connection ase() { return ase; }
 
-    Connection gg() { return gg; }
+    @Override public Connection gg() { return gg; }
 
-    void connect() throws SQLException {
+    @Override public String consumer() { return CONSUMER; }
+
+    @Override public long position() throws SQLException { return getOffset(); }
+
+    @Override public long pending() throws SQLException {
+        return queryLong("select count(*) from cdc_change_log where change_id > " + getOffset());
+    }
+
+    @Override public List<String> tableNames() { return Tables.ALL.stream().map(t -> t.name).toList(); }
+
+    @Override public long countRows(String table) throws SQLException { return queryLong(ase, "select count(*) from " + table); }
+
+    @Override
+    public void connect() throws SQLException {
         close();
         ase = DriverManager.getConnection(aseUrl, aseUser, asePass);
         gg = DriverManager.getConnection(ggUrl);
@@ -61,7 +72,8 @@ final class Cdc implements AutoCloseable {
     // ------------------------------------------------------------------ init (snapshot)
 
     /** Recreate the GridGain tables, copy a full snapshot, and position the offset at the pre-copy watermark. */
-    void init() throws Exception {
+    @Override
+    public void init() throws Exception {
         try (Statement st = gg.createStatement()) {
             for (TableSpec t : Tables.ALL) st.execute("DROP TABLE IF EXISTS " + t.name);
             for (String ddl : readResource("/gridgain-schema.sql").split(";")) {
@@ -98,7 +110,8 @@ final class Cdc implements AutoCloseable {
     // ------------------------------------------------------------------ streaming
 
     /** Apply up to {@code limit} change-log rows. Returns what was done; events==0 means caught up. */
-    Result applyOnce(int limit) throws SQLException {
+    @Override
+    public Result applyOnce(int limit) throws SQLException {
         long started = System.currentTimeMillis();
         long offset = getOffset();
         Map<String, Set<String>> keys = new LinkedHashMap<>();
@@ -164,7 +177,8 @@ final class Cdc implements AutoCloseable {
 
     // ------------------------------------------------------------------ status / verify
 
-    void status() throws SQLException {
+    @Override
+    public void status() throws SQLException {
         long offset = getOffset();
         long max = queryLong("select isnull(max(change_id), 0) from cdc_change_log");
         long pending = queryLong("select count(*) from cdc_change_log where change_id > " + offset);
@@ -178,7 +192,8 @@ final class Cdc implements AutoCloseable {
     }
 
     /** Compare every row (all columns) on both sides. Returns true when identical. */
-    boolean verify() throws SQLException {
+    @Override
+    public boolean verify() throws SQLException {
         boolean ok = true;
         System.out.printf("%-18s %8s %8s %8s %8s %8s%n", "table", "sybase", "gridgain", "missing", "extra", "differ");
         for (TableSpec t : Tables.ALL) {

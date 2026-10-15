@@ -1,0 +1,29 @@
+# Oracle Database 23ai Free (travel / reservations system) - native arm64 and amd64.
+# Joins the GridGain cluster's Docker network so the CDC reader reaches it as oracle:1521.
+#   docker compose up -d        first start takes ~1 min; login travel/travel, service FREEPDB1, port 1521
+services:
+  oracle:
+    image: gvenzl/oracle-free:23-slim-faststart
+    container_name: oracle
+    ports:
+      - "1521:1521"
+    environment:
+      ORACLE_PASSWORD: oracle          # SYS / SYSTEM (PoC value)
+      APP_USER: travel                 # schema owner, created in FREEPDB1
+      APP_USER_PASSWORD: travel
+    volumes:
+      - oracle-data:/opt/oracle/oradata
+    healthcheck:
+      test: ["CMD", "healthcheck.sh"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
+
+volumes:
+  oracle-data:
+
+networks:
+  default:
+    name: gridgain_default
+    external: true

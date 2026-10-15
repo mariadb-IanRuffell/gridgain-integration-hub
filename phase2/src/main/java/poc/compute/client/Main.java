@@ -23,7 +23,22 @@ public final class Main {
                 case "recalc": print(compute.execute(PKG + "RecalcLoyaltyTierTask", Integer.parseInt(a[1]))); break;
                 case "score": print(compute.execute(PKG + "ScoreCustomersTask", a.length > 1 ? Long.valueOf(a[1]) : null)); break;
                 case "order": print(compute.execute(PKG + "PlaceOrderTask", orderArgs(a))); break;
-                case "parity": System.exit(new Parity(client).run(a) ? 0 : 1); break;
+                case "trips": print(compute.execute(PKG + "TripsTask", Integer.parseInt(a[1]))); break;
+                case "hub": print(compute.execute(PKG + "CustomerHubTask", Integer.parseInt(a[1]))); break;
+                case "impact": print(compute.execute(PKG + "DisruptionImpactTask", Integer.parseInt(a[1]))); break;
+                case "cancel-booking": print(compute.execute(PKG + "CancelBookingTask", Integer.parseInt(a[1]))); break;
+                case "book": print(compute.execute(PKG + "BookFlightTask", bookArgs(a))); break;
+                case "delay": print(compute.execute(PKG + "RecordDelayTask", flightOp(a, false))); break;
+                case "cancel-flight": print(compute.execute(PKG + "RecordDelayTask", flightOp(a, true))); break;
+                case "disruptions": {
+                    Map<String, Object> m = new HashMap<>();
+                    if (a.length > 1) m.put("min_delay", Integer.parseInt(a[1]));
+                    print(compute.execute(PKG + "ProcessDisruptionsTask", m));
+                    break;
+                }
+                case "parity":
+                    System.exit((a.length > 1 && a[1].equals("oracle") ? new ParityOracle(client).run() : new Parity(client).run(a)) ? 0 : 1);
+                    break;
                 default: usage();
             }
         }
@@ -56,6 +71,28 @@ public final class Main {
         m.put("channel", channel);
         m.put("payment_method", method);
         m.put("items", flat);
+        return m;
+    }
+
+    /** book <customer_id> <flight_id> <cabin> <passenger> [channel] */
+    static Map<String, Object> bookArgs(String[] a) {
+        Map<String, Object> m = new HashMap<>();
+        m.put("customer_id", Integer.parseInt(a[1]));
+        m.put("flight_id", Integer.parseInt(a[2]));
+        m.put("cabin", a[3]);
+        m.put("passenger", a[4]);
+        if (a.length > 5) m.put("channel", a[5]);
+        return m;
+    }
+
+    /** delay <flight_id> <minutes> [reason]   |   cancel-flight <flight_id> [reason] */
+    static Map<String, Object> flightOp(String[] a, boolean cancel) {
+        Map<String, Object> m = new HashMap<>();
+        m.put("flight_id", Integer.parseInt(a[1]));
+        m.put("cancel", cancel);
+        int r = cancel ? 2 : 3;
+        if (!cancel) m.put("minutes", Integer.parseInt(a[2]));
+        if (a.length > r) m.put("reason", a[r]);
         return m;
     }
 
@@ -92,7 +129,10 @@ public final class Main {
     private static void usage() {
         System.err.println("usage: run.sh 360 <customer_id> | recalc <customer_id> | score [asOfMillis]\n"
             + "       run.sh order <customer_id> <channel> <method> <product:qty,...>\n"
-            + "       run.sh parity <360|recalc|score|order|errors|all>");
+            + "       run.sh trips <customer_id> | hub <customer_id> | impact <flight_id> | cancel-booking <booking_id>\n"
+            + "       run.sh book <customer_id> <flight_id> <cabin> <passenger> [channel] | delay <flight_id> <minutes> [reason]\n"
+            + "       run.sh cancel-flight <flight_id> [reason] | disruptions [min_delay]\n"
+            + "       run.sh parity <360|recalc|score|order|errors|all|oracle>");
         System.exit(2);
     }
 }

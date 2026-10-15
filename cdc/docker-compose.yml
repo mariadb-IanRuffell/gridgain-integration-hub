@@ -1,15 +1,29 @@
-# Sybase -> GridGain CDC reader, running continuously.
-# Joins the GridGain cluster's Docker network. Do NOT also run `./run.sh run` on the host.
+# CDC readers, running continuously: Sybase -> GridGain (gg-cdc) and Oracle -> GridGain (gg-cdc-oracle).
+# Both use the same image; CDC_SOURCE picks the source. Joined to the GridGain cluster's Docker network.
+# Do NOT also run `./run.sh run` on the host for the same source.
 services:
   gg-cdc:
     build: .
     image: gg-cdc-reader:1.0
     container_name: gg-cdc
     environment:
+      CDC_SOURCE: sybase
       # Sybase ASE runs on llama; use its IP because mDNS (.local) names do not resolve inside containers
       ASE_URL: jdbc:jtds:sybase://192.168.68.73:5000/testdb
       ASE_USER: tester
       ASE_PASSWORD: guest1234
+      GG_URL: jdbc:ignite:thin://gridgain1:10800,gridgain2:10800,gridgain3:10800
+      CDC_POLL_MS: "500"
+    restart: unless-stopped
+
+  gg-cdc-oracle:
+    image: gg-cdc-reader:1.0
+    container_name: gg-cdc-oracle
+    environment:
+      CDC_SOURCE: oracle
+      ORA_URL: jdbc:oracle:thin:@//oracle:1521/FREEPDB1      # the oracle container, same Docker network
+      ORA_USER: travel
+      ORA_PASSWORD: travel
       GG_URL: jdbc:ignite:thin://gridgain1:10800,gridgain2:10800,gridgain3:10800
       CDC_POLL_MS: "500"
     restart: unless-stopped

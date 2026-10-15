@@ -11,14 +11,26 @@ import org.springframework.stereotype.Repository;
 /** Reads the table sizes and the CDC reader's published stats (cdc_status, cdc_table_counts) from GridGain. */
 @Repository
 public class DashboardRepository {
-    public static final List<String> TABLES = List.of("customer", "address", "product", "orders", "order_item",
-        "payment", "interaction", "loyalty_txn", "customer_score", "loyalty_tier_rule");
+    /** A replicated table and the source system it comes from. */
+    public record TableRef(String name, String source) {}
+
+    public static final List<TableRef> TABLES = List.of(
+        new TableRef("customer", "sybase"), new TableRef("address", "sybase"), new TableRef("product", "sybase"),
+        new TableRef("orders", "sybase"), new TableRef("order_item", "sybase"), new TableRef("payment", "sybase"),
+        new TableRef("interaction", "sybase"), new TableRef("loyalty_txn", "sybase"), new TableRef("customer_score", "sybase"),
+        new TableRef("loyalty_tier_rule", "sybase"),
+        new TableRef("airport", "oracle"), new TableRef("flight", "oracle"), new TableRef("flight_inventory", "oracle"),
+        new TableRef("booking", "oracle"), new TableRef("booking_segment", "oracle"), new TableRef("flight_event", "oracle"),
+        new TableRef("compensation", "oracle"));
+
+    /** Consumer name each CDC reader publishes under in cdc_status. Sybase's is historical ("gridgain"). */
+    public static final String SYBASE_CONSUMER = "gridgain", ORACLE_CONSUMER = "oracle";
 
     public record CdcRow(long lastChangeId, long pendingEvents, long totalEvents, long totalUpserts, long totalDeletes,
                          long batches, int lastBatchEvents, long lastBatchMs, long lastLatencyMs, Instant startedAt,
                          Instant updatedAt) {}
 
-    public record SybaseCount(long rows, Instant countedAt) {}
+    public record SourceCount(long rows, Instant countedAt) {}
 
     private final JdbcClient jdbc;
 
@@ -28,23 +40,23 @@ public class DashboardRepository {
 
     public Map<String, Long> gridGainRows() {
         Map<String, Long> out = new LinkedHashMap<>();
-        for (String t : TABLES) out.put(t, jdbc.sql("SELECT COUNT(*) FROM " + t).query(Long.class).single());
+        for (TableRef t : TABLES) out.put(t.name(), jdbc.sql("SELECT COUNT(*) FROM " + t.name()).query(Long.class).single());
         return out;
     }
 
-    public Map<String, SybaseCount> sybaseRows() {
-        Map<String, SybaseCount> out = new LinkedHashMap<>();
+    public Map<String, SourceCount> sourceRows() {
+        Map<String, SourceCount> out = new LinkedHashMap<>();
         jdbc.sql("SELECT table_name, sybase_rows, updated_at FROM cdc_table_counts").query((rs, n) -> {
             Cols c = new Cols(rs);
-            out.put(c.string(), new SybaseCount(rs.getLong(2), rs.getTimestamp(3).toInstant()));
+            out.put(c.string(), new SourceCount(rs.getLong(2), rs.getTimestamp(3).toInstant()));
             return null;
         }).list();
         return out;
     }
 
-    public Optional<CdcRow> cdcStatus() {
+    public Optional<CdcRow> cdcStatus(String consumer) {
         return jdbc.sql("SELECT last_change_id, pending_events, total_events, total_upserts, total_deletes, batches, "
-                + "last_batch_events, last_batch_ms, last_latency_ms, started_at, updated_at FROM cdc_status WHERE consumer = 'gridgain'")
+                + "last_batch_events, last_batch_ms, last_latency_ms, started_at, updated_at FROM cdc_status WHERE consumer = ?").param(consumer)
             .query((rs, n) -> new CdcRow(rs.getLong(1), rs.getLong(2), rs.getLong(3), rs.getLong(4), rs.getLong(5),
                 rs.getLong(6), rs.getInt(7), rs.getLong(8), rs.getLong(9), rs.getTimestamp(10).toInstant(),
                 rs.getTimestamp(11).toInstant())).optional();

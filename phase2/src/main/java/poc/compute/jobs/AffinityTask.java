@@ -16,6 +16,10 @@ abstract class AffinityTask<A> extends ComputeTaskAdapter<A, Map<String, Object>
     @IgniteInstanceResource
     private transient Ignite ignite;
 
+    protected Ignite ignite() {
+        return ignite;
+    }
+
     abstract int customerId(A arg);
 
     abstract ComputeJob job(A arg);

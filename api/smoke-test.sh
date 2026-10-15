@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # End-to-end test of the running API: full CRUD lifecycles, validation and business-rule errors, and the
 # compute-job operations.   ./smoke-test.sh [base-url]
-# It creates rows (customers/products/an order) that stay in GridGain; `../cdc/run.sh init` resets GridGain to Sybase.
+# It creates rows (customers/products/an order, a flight with bookings) that stay in GridGain; `../cdc/run.sh init` resets GridGain to Sybase.
 set -uo pipefail
 BASE="${1:-http://localhost:8080}/api/v1"
 PASS=0; FAIL=0; TMP="$(mktemp)"; trap 'rm -f "$TMP"' EXIT
@@ -100,6 +100,55 @@ req POST "/customers/$CID/loyalty/recalculate"; status 200 "recalculate tier"; f
 req POST "/scoring/run"; status 200 "run scoring"; field 'map(.customers)|add > 200' true "scored all active customers"
 req GET "/customers/$CID/score"; status 200 "score available after scoring"
 req GET "/loyalty-tiers"; field length 4 "four loyalty tiers"
+
+echo "== travel: airports and flights (Oracle data)"
+req GET /airports; status 200 "list airports"; field length 18 "18 airports"
+req GET /airports/DXB; status 200 "get airport"; field .city Dubai "DXB is Dubai"
+req GET /airports/ZZZ; status 404 "unknown airport is 404"
+req GET "/flights?origin=DXB&destination=LHR&limit=3"; status 200 "filter flights by route"; field '.items | length > 0' true "route has flights"
+req GET "/flights?status=BOGUS"; status 400 "invalid flight status is a 400"
+DEP=$(python3 -c "import datetime;print((datetime.datetime.now(datetime.timezone.utc)+datetime.timedelta(days=30)).strftime('%Y-%m-%dT10:00:00Z'))")
+ARR=$(python3 -c "import datetime;print((datetime.datetime.now(datetime.timezone.utc)+datetime.timedelta(days=30)).strftime('%Y-%m-%dT14:00:00Z'))")
+FNO="XS$(echo $RUN | tail -c 5)"
+req POST /flights "{\"flightNo\":\"$FNO\",\"origin\":\"DXB\",\"destination\":\"LHR\",\"depTime\":\"$DEP\",\"arrTime\":\"$ARR\",\"distanceKm\":1000,\"aircraft\":\"A380\",\"inventory\":[{\"cabin\":\"ECONOMY\",\"seats\":2,\"baseFare\":500},{\"cabin\":\"BUSINESS\",\"seats\":1,\"baseFare\":1500}]}"
+status 201 "create flight"; FID=$(echo "$BODY" | jq -r .flightId); field .status SCHEDULED "new flight is SCHEDULED"; field '.inventory | length' 2 "two cabins of inventory"
+req POST /flights "{\"flightNo\":\"BAD\",\"origin\":\"DXB\",\"destination\":\"LHR\",\"depTime\":\"$ARR\",\"arrTime\":\"$DEP\",\"distanceKm\":1,\"inventory\":[{\"cabin\":\"ECONOMY\",\"seats\":1,\"baseFare\":1}]}"; status 400 "arrival before departure rejected"
+req POST /flights "{\"flightNo\":\"BAD\",\"origin\":\"DXB\",\"destination\":\"QQQ\",\"depTime\":\"$DEP\",\"arrTime\":\"$ARR\",\"distanceKm\":1,\"inventory\":[{\"cabin\":\"ECONOMY\",\"seats\":1,\"baseFare\":1}]}"; status 400 "unknown destination airport rejected"
+req PUT "/flights/$FID" "{\"flightNo\":\"$FNO\",\"origin\":\"DXB\",\"destination\":\"LHR\",\"depTime\":\"$DEP\",\"arrTime\":\"$ARR\",\"distanceKm\":1000,\"aircraft\":\"B777\"}"; status 200 "update flight"; field .aircraft B777 "aircraft changed"
+
+echo "== bookings (book-flight and cancel-booking compute jobs)"
+req POST /bookings "{\"customerId\":$CID,\"flightId\":$FID,\"cabin\":\"BUSINESS\",\"passenger\":\"Smoke Passenger\",\"channel\":\"APP\"}"
+status 201 "book a business seat"; BID=$(echo "$BODY" | jq -r .bookingId); field .seatNo 3A "first business seat is 3A"; field '.fare == 1500' true "fare = base fare"; field .milesEarned 1500 "miles = 1000 km x 1.5"
+req POST /bookings "{\"customerId\":$CID,\"flightId\":$FID,\"cabin\":\"BUSINESS\",\"passenger\":\"Second Passenger\"}"; status 409 "business cabin sold out is 409"
+req POST /bookings "{\"customerId\":$CID,\"flightId\":$FID,\"cabin\":\"ECONOMY\",\"passenger\":\"Eco One\"}"; status 201 "book economy seat 1"; field .seatNo 12A "first economy seat is 12A"
+req POST /bookings "{\"customerId\":$CID,\"flightId\":$FID,\"cabin\":\"ECONOMY\",\"passenger\":\"Eco Two\"}"; status 201 "book economy seat 2"; field .seatNo 12B "second economy seat is 12B"
+req POST /bookings "{\"customerId\":$CID,\"flightId\":$FID,\"cabin\":\"ECONOMY\",\"passenger\":\"Eco Three\"}"; status 409 "economy sold out is 409"
+req POST /bookings "{\"customerId\":$CID,\"flightId\":$FID,\"cabin\":\"PREMIUM\",\"passenger\":\"X\"}"; status 400 "invalid cabin rejected"
+req POST /bookings "{\"customerId\":$CID,\"flightId\":999999999,\"cabin\":\"ECONOMY\",\"passenger\":\"X\"}"; status 404 "unknown flight is 404"
+req GET "/bookings/$BID"; status 200 "get booking"; field '.segments | length' 1 "one segment"; field .status CONFIRMED "booking confirmed"
+req GET "/bookings?customerId=$CID"; field '.total >= 3' true "customer has at least 3 bookings"
+req POST "/bookings/$BID/cancel"; status 200 "cancel the business booking"; field '.refund == 1350' true "refund = 90% of 1500 (departure > 72 h away)"; field .bookingStatus CANCELLED "booking cancelled"
+req POST "/bookings/$BID/cancel"; status 409 "cancelling twice is 409"
+req POST /bookings/999999999/cancel; status 404 "cancel unknown booking is 404"
+req GET "/flights/$FID"; field '.inventory[] | select(.cabin=="BUSINESS") | .seatsAvailable' 1 "business seat released"
+
+echo "== flight operations, disruption processing and the hub (Oracle x Sybase)"
+req POST "/flights/$FID/delay" '{"minutes":400,"reason":"smoke test"}'; status 200 "record a delay"; field .status DELAYED "flight DELAYED"; field .affectedBookings 2 "two bookings affected"
+req POST "/flights/$FID/delay" '{"minutes":0}'; status 400 "delay out of range rejected"
+req GET "/flights/$FID/events"; field length 1 "one flight event"; field '.[0].eventType' DELAY "event is a DELAY"
+req GET "/flights/$FID/impact"; status 200 "disruption impact (hub)"; field '.passengers | length' 2 "two affected passengers"
+field '.passengers[0].loyalty_tier != null' true "passengers carry the Sybase loyalty tier"; field '.total_base_compensation == 500' true "base compensation = 2 x 50% of 500"
+req POST "/disruptions/process?minDelay=180"; status 200 "process disruptions"; field '[.[] | select(.reason=="DELAY_360")] | length' 1 "a DELAY_360 group exists (400 min delay)"
+req GET "/compensation?flightId=$FID"; field .total 2 "two compensation rows for the flight"; field '.items[0].amount == 250' true "50% of the 500 economy fare"
+req GET "/customers/$CID/trips"; status 200 "customer trips"; field '.upcoming | length >= 2' true "upcoming trips include the new bookings"
+req GET "/customers/$CID/hub"; status 200 "customer hub view"; field '.profile[0].customer_id' "$CID" "hub profile is this customer (Sybase)"
+field '.travel[0].bookings >= 2' true "hub has the customer's bookings (Oracle)"; field '.at_risk_trips | length >= 2' true "hub flags trips on the delayed flight"
+field '.value[0].lifetime_value == (.value[0].retail_spend + .value[0].travel_spend)' true "lifetime value = retail spend + travel spend"
+req GET /customers/999999999/hub; status 404 "hub for unknown customer is 404"
+req GET /customers/999999999/trips; status 404 "trips for unknown customer is 404"
+req POST "/flights/$FID/cancel" '{"reason":"smoke test"}'; status 200 "cancel the flight"; field .status CANCELLED "flight CANCELLED"
+req POST "/flights/$FID/cancel" '{"reason":"again"}'; status 409 "cancelling a cancelled flight is 409"
+req DELETE "/flights/$FID"; status 409 "flight with bookings cannot be deleted"
 
 echo "== cleanup: customer without orders can be deleted"
 req POST /customers "{\"firstName\":\"Temp\",\"lastName\":\"Delete$RUN\",\"email\":\"temp$RUN@example.com\"}"; T=$(echo "$BODY" | jq -r .customerId)

@@ -1,9 +1,23 @@
-# Sybase → GridGain: phased migration PoC
+# Sybase + Oracle → GridGain: phased migration PoC (data hub)
+
+Two source systems with deliberately **different, complementary data** are moved onto one GridGain 8.9 cluster in the same
+two phases, and joined there:
+
+| System | Domain | Data | Join key |
+|---|---|---|---|
+| **Sybase ASE** (on `llama`) | CRM / commerce: "customer 360" | customers, addresses, products, orders, payments, loyalty, interactions | `customer_id` |
+| **Oracle 26ai Free** (local Docker) | travel / reservations | airports, flights, seat inventory, bookings, segments, flight events, compensation | `booking.customer_id` = the Sybase customer id |
+
+```
+Sybase ASE ──triggers──► change log ──► CDC reader ─┐                          ┌─► compute jobs (the former stored procedures)
+                                                    ├─► GridGain 3-node cluster ┼─► REST API (CRUD + operations + hub) + live dashboard
+Oracle ─────triggers──► change log ──► CDC reader ─┘   (native persistence)    └─► cross-source SQL joins (hub/queries.sql)
+```
 
 | Phase | Goal | Status |
 |-------|------|--------|
-| 1 | CDC from Sybase ASE into GridGain (Sybase stays system of record) | **done**, see below |
-| 2 | Re-implement stored procedures as GridGain compute jobs; apps call GridGain | **done**, see below (plus a REST API in front of it) |
+| 1 | CDC from each source into GridGain (the sources stay systems of record) | **done** for Sybase and Oracle |
+| 2 | Re-implement each source's stored procedures as GridGain compute jobs; apps call GridGain | **done** for Sybase and Oracle (plus a REST API in front of both, and hub jobs that join them) |
 
 There is no third phase: decommissioning is just switching Sybase and the CDC reader off. That needs the applications to stop writing in Sybase and GridGain to be the only durable copy; see "Before switching Sybase off" below.
 
@@ -131,6 +145,95 @@ recreates the GridGain tables).
 `MERGE` per row (use a data streamer at scale); job code reads columns by name, so DDL changes need a
 matching job change.
 
+## Second source: Oracle travel system (`oracle/`)
+
+An airline-style reservations system on Oracle Database 26ai Free, chosen so its data **complements** the Sybase CRM data instead of
+duplicating it. Bookings reference the Sybase `customer_id`; there is no foreign key (different system), so only the GridGain hub can join them.
+
+```bash
+cd oracle && ./deploy.sh              # start Oracle (Docker, native arm64), build schema + seed + PL/SQL + CDC triggers
+./sqlplus.sh "select count(*) from booking"      # ad-hoc SQL as TRAVEL (docker exec sqlplus);  -f file.sql runs a script
+./gen-load.sh 60 5                    # ~5 real bookings/s for 60 s (about 8% cancelled again), see the dashboard move
+```
+
+Unlike Sybase, **Oracle runs locally on your Mac** (`gvenzl/oracle-free:23-slim-faststart`, login `travel`/`travel`, service `FREEPDB1`,
+port 1521, on the cluster's Docker network as `oracle`).
+
+| Table | Rows | Notes |
+|---|---|---|
+| `airport` | 18 | reference |
+| `flight` | 238 | spokes to/from a hub, -45 d to +60 d; 8 delayed and 3 cancelled in the future, some arrived late |
+| `flight_inventory` | 714 | per flight and cabin: seats, available, `next_seat` (never decremented, so seat numbers stay unique), base fare |
+| `booking`, `booking_segment` | 650 / 953 | customers 1-250 (the Sybase ids), 1-3 segments, ~5% cancelled |
+| `flight_event`, `compensation` | 28 / 0 | `compensation` is the output of `sp_process_disruptions` |
+
+**PL/SQL procedures (the migration candidates)** and the error numbers they raise (`RAISE_APPLICATION_ERROR`):
+
+| Procedure | Pattern | Errors |
+|---|---|---|
+| `sp_customer_trips` | three `SYS_REFCURSOR`s: upcoming, past, statistics | |
+| `sp_book_flight` | guarded inventory decrement + generated keys, one transaction | 20103 flight not found, 20104 passenger, 20105 cabin, 20106 not open, 20107 sold out |
+| `sp_cancel_booking` | releases seats, refund by time to departure (>72 h 90%, >24 h 50%) | 20110 not found, 20111 not active, 20112 nothing to cancel |
+| `sp_record_delay`, `sp_cancel_flight` | status change + event row, returns affected bookings | 20120 range, 20121 already operated/cancelled |
+| `sp_process_disruptions` | cursor loop + `MERGE` per segment (cancelled 100%; delay >=720 min 75%, >=360 50%, else 25%) | |
+
+### CDC from Oracle (Phase 1)
+
+Same idea as Sybase (row triggers write `(table, op, pk)` to `cdc_change_log`; the reader re-reads the current row and MERGEs it into
+GridGain, or DELETEs it), but **the visibility problem is different and so is the fix**. Sybase blocks readers behind uncommitted rows;
+Oracle never does, so polling `change_id > last` would silently skip a change whose transaction commits late. The log table is created
+with `ROWDEPENDENCIES` so each row carries its own **commit SCN** (`ORA_ROWSCN`); each poll takes a snapshot SCN
+(`DBMS_FLASHBACK.GET_SYSTEM_CHANGE_NUMBER`) and reads exactly the rows committed in `(last_scn, snapshot]`. Verified with two sessions:
+the one that inserted first but committed later has the higher SCN and lands in a later window instead of being lost.
+Applied log rows are purged after 10 minutes (an `ORA_ROWSCN` predicate scans the table, so it must stay small).
+
+```bash
+cd cdc
+CDC_SOURCE=oracle ./run.sh init      # create the GridGain tables, snapshot, set the SCN offset   (also: run | once | status | verify)
+CDC_SOURCE=oracle ./run.sh verify    # every column of every row compared with Oracle
+```
+
+GridGain tables (`cdc/src/main/resources/gridgain-schema-oracle.sql`): `booking`, `booking_segment`, `compensation` are partitioned and
+**colocated on `customer_id`, exactly like the Sybase customer data** (segments and compensation carry a denormalised `customer_id`);
+`airport`, `flight`, `flight_inventory`, `flight_event` are replicated. All TRANSACTIONAL.
+
+### Compute jobs (Phase 2)
+
+| PL/SQL procedure | GridGain job | How it changed |
+|---|---|---|
+| `sp_customer_trips` | `TripsTask` | one job on the node owning the customer, three queries |
+| `sp_book_flight` | `BookFlightTask` | one cache transaction over inventory, booking and segment |
+| `sp_cancel_booking` | `CancelBookingTask` | same rules; owner found by looking up the booking's customer |
+| `sp_record_delay`, `sp_cancel_flight` | `RecordDelayTask` | flight + event in one transaction, affected count from a distributed query |
+| `sp_process_disruptions` | `ProcessDisruptionsTask` | one job per node, one local query, owner-only processing |
+
+```bash
+cd phase2 && ./redeploy.sh                         # roll the jar out to the 3 nodes
+./run.sh trips 8 | book 12 2 BUSINESS "A Passenger" | cancel-booking 5 | delay 2 400 weather | disruptions
+docker stop gg-cdc-oracle; (cd ../oracle && ./deploy.sh); (cd ../cdc && CDC_SOURCE=oracle ./run.sh init)   # identical starting state
+./run.sh parity oracle                             # 30 checks, Oracle procedure vs job on identical inputs
+```
+
+**Parity (30 checks):** `sp_customer_trips` for all 204 customers with bookings x 3 result sets; booking (seat, fare, miles, inventory);
+full and partial cancellation (refund, statuses, seats released); delay and cancel flight (affected count, status, event text);
+disruption processing (summary and the full `compensation` table) and 11 error numbers. Behaviour differences from PL/SQL are deliberate
+and few: new ids come from GridGain sequences from 1,000,000,000 (never colliding with Oracle identities), and the parity run compares the
+test booking each system created apart from its id.
+
+### The hub: joining both systems
+
+Because customer-owned data from **both** sources is colocated on `customer_id`, queries and jobs that join them run on one node with no
+data movement. These have no equivalent in either source system:
+
+- **SQL** ([hub/queries.sql](hub/queries.sql), `hub/run.sh` runs them all, or open the file in DBeaver): lifetime value (retail from Sybase + travel
+  from Oracle), spend by loyalty tier, **proactive service** (customers with a negative interaction booked on a delayed or cancelled flight),
+  top routes for GOLD/PLATINUM customers, a cross-sell list (big retail spenders who never booked a flight), compensation cost by tier. Each runs in 3-30 ms.
+- **`CustomerHubTask`** (`GET /api/v1/customers/{id}/hub`): profile, tier and orders (Sybase) with bookings, miles, upcoming and at-risk trips
+  (Oracle), and `lifetime_value = retail spend + travel spend`. Cross-checked against both source databases (e.g. customer 8: 18 orders / 87,550 and
+  24 bookings / 66,455 / 174,815 miles).
+- **`DisruptionImpactTask`** (`GET /api/v1/flights/{id}/impact`): the passengers of a delayed or cancelled flight, ranked by tier, cabin and retail
+  spend, each with the base compensation and a tier-weighted suggested amount (Sybase's loyalty multiplier x Oracle's fare).
+
 ## GridGain cluster: 3 nodes, native persistence
 
 ```bash
@@ -165,12 +268,12 @@ image and deployed on the cluster's Docker network.
 ```bash
 cd gridgain && ./cluster.sh up        # the API joins the cluster's network, so start the cluster first
 cd ../api && ./build.sh               # mvn package + docker compose up --build; waits for /actuator/health
-./smoke-test.sh                       # 84 end-to-end checks against the running container
+./smoke-test.sh                       # 148 end-to-end checks against the running container
 ./generate-openapi.sh                 # regenerate openapi.yaml from the running service
 ```
 
 - Swagger UI: http://localhost:8080/swagger-ui.html, spec: [api/openapi.yaml](api/openapi.yaml)
-  (OpenAPI 3.0.1, 33 operations, generated from the controllers and DTOs by springdoc, so it cannot drift).
+  (OpenAPI 3.0.1, 52 operations, generated from the controllers and DTOs by springdoc, so it cannot drift).
 - Base path `/api/v1`. Errors are RFC 7807 problem details; list endpoints return
   `{items, limit, offset, total}`; timestamps are ISO-8601 UTC.
 
@@ -183,12 +286,19 @@ cd ../api && ./build.sh               # mvn package + docker compose up --build;
 | Interactions | `/customers/{id}/interactions[/{id}]` CRUD; closing stamps `closedAt` |
 | Loyalty | `GET /loyalty-tiers`, `/customers/{id}/loyalty-transactions`, `/customers/{id}/score` (read-only) |
 | Operations | `GET /customers/{id}/360`, `POST /customers/{id}/loyalty/recalculate`, `POST /scoring/run` (compute jobs) |
+| Airports | `GET /airports[/{iata}]` (Oracle reference data) |
+| Flights | `GET/POST /flights`, `GET/PUT/DELETE /flights/{id}` (with seat inventory), `GET /flights/{id}/events`, `POST /flights/{id}/delay`, `POST /flights/{id}/cancel` |
+| Bookings | `GET /bookings`, `GET /bookings/{id}`, **`POST /bookings`** = book-flight job, **`POST /bookings/{id}/cancel`** = cancel-booking job |
+| Hub | `GET /customers/{id}/trips`, **`GET /customers/{id}/hub`** and **`GET /flights/{id}/impact`** (join Oracle x Sybase), `POST /disruptions/process`, `GET /compensation` |
 
 **Design notes**
 - CRUD runs as SQL over the GridGain thin JDBC driver (all three nodes in the URL, so it fails over).
   The business operations call the Phase 2 compute jobs through the thin client, so stock checks, points and
   tier changes stay atomic and identical to the stored procedures. Job errors keep the stored procedures'
-  numbers and map to HTTP: 20002 -> 404, 20003 (insufficient stock) -> 409, 20004/20006/20007 -> 400.
+  numbers and map to HTTP: not found (20002, 20103, 20110) -> 404; conflicts (20003 insufficient stock, 20106 flight closed, 20107 sold out,
+  20111 not active, 20112, 20121) -> 409; bad input (20004, 20006, 20007, 20104, 20105, 20120) -> 400.
+- Bookings, like orders, are only created and cancelled through the jobs (never by raw insert); flights can be created, edited while they have not operated, and
+  deleted only when nothing is booked on them.
 - Orders are only created through the job (never by raw insert). Order fields are not editable except the
   channel; only CANCELLED orders can be deleted. Customers and products referenced by orders cannot be deleted
   (409): set status INACTIVE or active=false.
@@ -199,46 +309,50 @@ cd ../api && ./build.sh               # mvn package + docker compose up --build;
 
 **Limits (PoC):** no authentication; SQL DML is per statement, so cascading customer delete is not atomic;
 rows written through the API exist only in GridGain (CDC is one-way), so `cdc verify` shows them as extras
-until Sybase is switched off and GridGain is the only copy. `./smoke-test.sh` leaves a few rows behind; `cdc/run.sh init` resets GridGain to Sybase.
-Verified: the smoke suite (77 checks at the time) also passed with `gridgain1` (the first address, and coordinator) killed.
+until Sybase is switched off and GridGain is the only copy. `./smoke-test.sh` leaves a few rows behind (including a flight with bookings and compensation rows for the seeded disruptions); `CDC_SOURCE=oracle ./run.sh init` and `./run.sh init` reset GridGain to each source.
+Verified: the smoke suite (77 checks at the time, before the travel endpoints) also passed with `gridgain1` (the first address, and coordinator) killed.
 
-### CDC reader as a service
+### CDC readers as services
 
-The reader also runs as the `gg-cdc` container (`cdc/Dockerfile`, `cdc/docker-compose.yml`), joined to the GridGain
-network and restarted automatically. It reaches Sybase by IP (`192.168.68.73`) because `.local` names do not resolve
-inside containers.
+Both readers run as containers from one image (`cdc/Dockerfile`, `cdc/docker-compose.yml`), joined to the GridGain network and restarted
+automatically: `gg-cdc` (`CDC_SOURCE=sybase`, reaches Sybase by IP `192.168.68.73` because `.local` names do not resolve inside containers)
+and `gg-cdc-oracle` (`CDC_SOURCE=oracle`, reaches `oracle:1521`). Never also run `./run.sh run` on the host for the same source.
 
 ```bash
-cd cdc && ./build.sh        # mvn package + docker compose up --build;   logs: docker logs -f gg-cdc
+cd cdc && ./build.sh        # mvn package + docker compose up --build;   logs: docker logs -f gg-cdc  /  gg-cdc-oracle
 ```
 
-While streaming it publishes cumulative counters to two small GridGain tables, `cdc_status` (position, backlog,
-totals, last-batch size/time/latency; heartbeat every 2 s) and `cdc_table_counts` (Sybase rows per table, every
-3 s). The dashboard reads those. `cdc/run.sh init` does not touch them.
+While streaming, each reader publishes cumulative counters to two small GridGain tables, `cdc_status` (one row per reader: position, backlog,
+totals, last-batch size/time/latency; heartbeat every 2 s) and `cdc_table_counts` (row count per source table, every 3 s). The dashboard reads
+those. `run.sh init` does not touch them.
 
 ### Live dashboard
 
 `http://localhost:8080/` (also `/dashboard.html`) is served by the API container, no external libraries. It shows:
 
-- **Table sizes**: GridGain rows per table next to the Sybase rows last counted by the CDC reader, with a
-  delta. A positive delta means GridGain holds rows Sybase does not (rows created through the REST API,
-  or the leftovers of `smoke-test.sh`).
-- **Live graphs** (last 1/5/15 minutes, 2-second samples): CDC events/s (upserts, deletes), CDC backlog and
-  latency, REST requests/s (reads, writes), REST average latency and errors/s. Hover for exact values.
-- **Status pills** for GridGain nodes online, CDC running/stopped (heartbeat older than ~10 s = stopped), API uptime.
+- **Table sizes**: all 17 tables, colour-coded by source system, GridGain rows next to the rows last counted in Sybase or Oracle by the
+  CDC reader, with a delta. A positive delta means GridGain holds rows the source does not (rows created through the REST API or compute jobs,
+  or the leftovers of `smoke-test.sh`), or the source count is a few seconds behind during a burst.
+- **Live graphs** (last 1/5/15 minutes, 2-second samples): CDC events/s, backlog and latency for **Sybase and Oracle side by side**, REST requests/s
+  (reads, writes), REST average latency and errors/s. Hover for exact values.
+- **Status pills** for GridGain nodes online, each CDC reader running/stopped (heartbeat older than ~10 s = stopped), API uptime.
 - A **REST read-traffic generator** (dropdown, runs in the browser) to see the REST graphs move.
   To see the CDC graphs move, change data in Sybase with `sybase/gen-load.sh`:
   `./gen-load.sh 60 100` touches ~100 customer rows/s for 60 s (only `updated_at` changes), and
   `./gen-load.sh --orders 60 5` places ~5 new orders/s through the stored procedures (about 11 CDC events per
   order: orders, items, payment, points ledger, customer, stock). Orders are real Sybase data; `sybase/deploy.sh` resets it.
+  `oracle/gen-load.sh 60 5` books ~5 flights/s in Oracle (about 8% cancelled again); `oracle/deploy.sh` resets it.
 
 How it works: the API counts its own business requests in a servlet filter (the dashboard's polling under
 `/api/v1/dashboard` is excluded), a scheduled sampler turns those and the CDC counters into per-second rates, and the
-data is served by `GET /api/v1/dashboard/summary` and `/series?since=`. CDC rates use the reader's publish
+data is served by `GET /api/v1/dashboard/summary` and `/series?since=`. CDC rates (per reader) use the reader's publish
 timestamps as the time base (using the sampler's clock aliased 65/130 events/s for a steady 100/s). The latency graph
 compares a Sybase timestamp with the reader's clock, so it is approximate if the two clocks differ.
 
 ## Environment
+
+Oracle runs in the `oracle` container on this Mac (see "Second source" above); GridGain, the API and both CDC readers are Docker containers on the
+`gridgain_default` network. Sybase is the only remote piece:
 
 ASE runs in the `datagrip/sybase` image inside an Ubuntu 20.04 VM (kernel 5.4) on `llama.local`
 (QEMU/KVM in container `sybvm`, files in `~/sybase-vm`). It must be a VM: the 2015 ASE build
@@ -267,3 +381,9 @@ tried are in [sybase/docker/README.md](sybase/docker/README.md).
   cache, which is not allowed inside a transaction: allocate ids before `txStart`.
 - The CDC reader runs from `target/classes`; after editing `gridgain-schema.sql` rebuild (`mvn package`) or the
   old DDL is used.
+
+## Oracle gotchas hit so far
+- `docker exec` needs `-i` to receive a heredoc; PL/SQL blocks need a `/` terminator (the single-statement helper appends `;`).
+- `ROWDEPENDENCIES` on the change log is what makes `ORA_ROWSCN` the real commit SCN; polling by `change_id` would lose late commits.
+- ojdbc's `getObject` on a `TIMESTAMP` column returns `oracle.sql.TIMESTAMP`, not `java.sql.Timestamp`: read timestamps with `getTimestamp`.
+- GridGain has no `LISTAGG` and its SQL engine cannot do arithmetic on output aliases in `ORDER BY`; use the aggregate expressions.

@@ -2,8 +2,9 @@ openapi: 3.0.1
 info:
   title: Customer 360 API
   description: |
-    CRUD and business operations over the Customer 360 data held in a GridGain 8.9 cluster
-    (replicated from Sybase ASE by CDC during the phased migration).
+    CRUD and business operations over two source systems consolidated in a GridGain 8.9 data hub:
+    customer / order / loyalty data from Sybase ASE and travel / reservation data from Oracle, both replicated by CDC
+    and joinable on customer_id (hub endpoints).
 
     * Resource endpoints read and write GridGain tables through SQL.
     * Business operations (`360`, `recalculate`, `scoring`, `POST /orders`) call the GridGain compute
@@ -33,6 +34,17 @@ tags:
   description: "Loyalty tiers, points ledger and churn score (read-only data)"
 - name: Operations
   description: Business operations implemented as GridGain compute jobs
+- name: Airports
+  description: Airport reference data (Oracle travel system)
+- name: Flights
+  description: "Flight schedule, seat inventory and operations: delay, cancel (Oracle\
+    \ travel system)"
+- name: Bookings
+  description: Reservations. Booking and cancelling run the compute jobs that replaced
+    the PL/SQL procedures
+- name: Hub
+  description: Endpoints that combine BOTH source systems (Sybase customers x Oracle
+    travel) plus disruption processing
 - name: Dashboard
   description: Data behind the live dashboard page at /dashboard.html
 paths:
@@ -162,12 +174,76 @@ paths:
       responses:
         "200":
           description: OK
+  /api/v1/flights/{flightId}:
+    get:
+      tags:
+      - Flights
+      summary: Get a flight with its seat inventory
+      operationId: get_2
+      parameters:
+      - name: flightId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int32
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/Flight"
+    put:
+      tags:
+      - Flights
+      summary: Change a flight's schedule details
+      description: Only flights that have not operated (SCHEDULED or DELAYED) can
+        be edited. Status and delay change through the delay and cancel operations.
+      operationId: update_2
+      parameters:
+      - name: flightId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int32
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FlightInput"
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/Flight"
+    delete:
+      tags:
+      - Flights
+      summary: Delete a flight
+      description: Refused with 409 if any booking segment references it (cancel the
+        flight instead).
+      operationId: delete_2
+      parameters:
+      - name: flightId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int32
+      responses:
+        "200":
+          description: OK
   /api/v1/customers/{customerId}:
     get:
       tags:
       - Customers
       summary: Get a customer
-      operationId: get_2
+      operationId: get_3
       parameters:
       - name: customerId
         in: path
@@ -188,7 +264,7 @@ paths:
       summary: Replace a customer's editable fields
       description: "Loyalty tier and points are not editable here: they change through\
         \ orders and the recalculate operation."
-      operationId: update_2
+      operationId: update_3
       parameters:
       - name: customerId
         in: path
@@ -216,7 +292,7 @@ paths:
       description: "Refused with 409 if the customer has orders (set status INACTIVE\
         \ instead). Otherwise also removes their addresses, interactions, loyalty\
         \ transactions and score."
-      operationId: delete_2
+      operationId: delete_3
       parameters:
       - name: customerId
         in: path
@@ -232,7 +308,7 @@ paths:
       tags:
       - Interactions
       summary: Get an interaction
-      operationId: get_3
+      operationId: get_4
       parameters:
       - name: customerId
         in: path
@@ -258,7 +334,7 @@ paths:
       - Interactions
       summary: Replace an interaction
       description: Closing it stamps closedAt; re-opening clears it.
-      operationId: update_3
+      operationId: update_4
       parameters:
       - name: customerId
         in: path
@@ -289,7 +365,7 @@ paths:
       tags:
       - Interactions
       summary: Delete an interaction
-      operationId: delete_3
+      operationId: delete_4
       parameters:
       - name: customerId
         in: path
@@ -311,7 +387,7 @@ paths:
       tags:
       - Addresses
       summary: Get an address
-      operationId: get_4
+      operationId: get_5
       parameters:
       - name: customerId
         in: path
@@ -336,7 +412,7 @@ paths:
       tags:
       - Addresses
       summary: Replace an address
-      operationId: update_4
+      operationId: update_5
       parameters:
       - name: customerId
         in: path
@@ -367,7 +443,7 @@ paths:
       tags:
       - Addresses
       summary: Delete an address
-      operationId: delete_4
+      operationId: delete_5
       parameters:
       - name: customerId
         in: path
@@ -556,6 +632,192 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/PlaceOrderResult"
+  /api/v1/flights:
+    get:
+      tags:
+      - Flights
+      summary: List flights
+      description: "Filter by route, status and departure window; soonest first."
+      operationId: list_2
+      parameters:
+      - name: origin
+        in: query
+        description: Origin IATA code
+        required: false
+        schema:
+          type: string
+        example: DXB
+      - name: destination
+        in: query
+        description: Destination IATA code
+        required: false
+        schema:
+          type: string
+        example: LHR
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - SCHEDULED
+          - DELAYED
+          - CANCELLED
+          - DEPARTED
+          - ARRIVED
+      - name: from
+        in: query
+        description: Departing at or after (ISO-8601)
+        required: false
+        schema:
+          type: string
+          format: date-time
+      - name: to
+        in: query
+        description: Departing before (ISO-8601)
+        required: false
+        schema:
+          type: string
+          format: date-time
+      - name: limit
+        in: query
+        required: false
+        schema:
+          maximum: 500
+          minimum: 1
+          type: integer
+          format: int32
+          default: 50
+      - name: offset
+        in: query
+        required: false
+        schema:
+          minimum: 0
+          type: integer
+          format: int32
+          default: 0
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PageFlight"
+    post:
+      tags:
+      - Flights
+      summary: Create a flight
+      description: Starts SCHEDULED with no delay. Provide the seat inventory per
+        cabin (seats and base fare).
+      operationId: create_1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FlightInput"
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/Flight"
+  /api/v1/flights/{flightId}/delay:
+    post:
+      tags:
+      - Flights
+      summary: Record a delay
+      description: "Runs the record-delay job (replaces sp_record_delay): sets the\
+        \ flight DELAYED with the delay in minutes, writes a flight event and returns\
+        \ how many confirmed bookings are affected. 409 if the flight has already\
+        \ operated or is cancelled."
+      operationId: delay
+      parameters:
+      - name: flightId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int32
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DelayRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/FlightOpResult"
+  /api/v1/flights/{flightId}/cancel:
+    post:
+      tags:
+      - Flights
+      summary: Cancel a flight
+      description: Runs the cancel-flight job (replaces sp_cancel_flight). Passengers'
+        compensation is then produced by POST /disruptions/process.
+      operationId: cancel
+      parameters:
+      - name: flightId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int32
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CancelFlightRequest"
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/FlightOpResult"
+  /api/v1/disruptions/process:
+    post:
+      tags:
+      - Hub
+      summary: Compute compensation for disrupted flights
+      description: "Runs the process-disruptions job (replaces sp_process_disruptions),\
+        \ one job per node: every segment on a cancelled flight (100% of the fare)\
+        \ or on a flight delayed by at least minDelay minutes (75% from 720 min, 50%\
+        \ from 360, otherwise 25%) gets a compensation row. Returns segments and total\
+        \ amount per reason."
+      operationId: process
+      parameters:
+      - name: minDelay
+        in: query
+        required: false
+        schema:
+          maximum: 1440
+          minimum: 1
+          type: integer
+          format: int32
+          default: 180
+      - name: asOf
+        in: query
+        description: Compute as of this instant (ISO-8601); defaults to now
+        required: false
+        schema:
+          type: string
+          format: date-time
+        example: 2026-10-15T12:00:00Z
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  type: object
   /api/v1/customers:
     get:
       tags:
@@ -563,7 +825,7 @@ paths:
       summary: List customers
       description: "Filter by status, loyalty tier, exact email, or a name fragment;\
         \ paged."
-      operationId: list_2
+      operationId: list_3
       parameters:
       - name: status
         in: query
@@ -625,7 +887,7 @@ paths:
       summary: Create a customer
       description: New customers start at tier BLUE with 0 points. Email must be unique
         (case-insensitive).
-      operationId: create_1
+      operationId: create_2
       requestBody:
         content:
           application/json:
@@ -669,7 +931,7 @@ paths:
       - Interactions
       summary: List a customer's service interactions
       description: Newest first.
-      operationId: list_3
+      operationId: list_4
       parameters:
       - name: customerId
         in: path
@@ -713,7 +975,7 @@ paths:
       tags:
       - Interactions
       summary: Log an interaction
-      operationId: create_2
+      operationId: create_3
       parameters:
       - name: customerId
         in: path
@@ -739,7 +1001,7 @@ paths:
       tags:
       - Addresses
       summary: List a customer's addresses
-      operationId: list_4
+      operationId: list_5
       parameters:
       - name: customerId
         in: path
@@ -761,7 +1023,7 @@ paths:
       - Addresses
       summary: Add an address
       description: Marking it primary clears the flag on the customer's other addresses.
-      operationId: create_3
+      operationId: create_4
       parameters:
       - name: customerId
         in: path
@@ -782,6 +1044,106 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/Address"
+  /api/v1/bookings:
+    get:
+      tags:
+      - Bookings
+      summary: List bookings
+      description: "Newest first. customerId is the Sybase customer id. Segments are\
+        \ only included by GET /bookings/{id}."
+      operationId: list_6
+      parameters:
+      - name: customerId
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - CONFIRMED
+          - CANCELLED
+      - name: flightId
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+      - name: limit
+        in: query
+        required: false
+        schema:
+          maximum: 500
+          minimum: 1
+          type: integer
+          format: int32
+          default: 50
+      - name: offset
+        in: query
+        required: false
+        schema:
+          minimum: 0
+          type: integer
+          format: int32
+          default: 0
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PageBooking"
+    post:
+      tags:
+      - Bookings
+      summary: Book a flight
+      description: "Runs the book-flight job (replaces sp_book_flight): one transaction\
+        \ on the customer's node that takes a seat from the flight's cabin inventory,\
+        \ assigns the next seat number and creates the booking and its segment, with\
+        \ miles earned. 404 flight not found, 409 flight not open or cabin sold out,\
+        \ 400 bad cabin or passenger."
+      operationId: book
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BookFlightRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/BookFlightResult"
+  /api/v1/bookings/{bookingId}/cancel:
+    post:
+      tags:
+      - Bookings
+      summary: Cancel a booking
+      description: "Runs the cancel-booking job (replaces sp_cancel_booking): cancels\
+        \ every future segment, releases the seats and returns the refund (more than\
+        \ 72 h before departure 90%, more than 24 h 50%, otherwise nothing). 404 unknown,\
+        \ 409 already cancelled or nothing to cancel."
+      operationId: cancel_1
+      parameters:
+      - name: bookingId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int32
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/CancelBookingResult"
   /api/v1/loyalty-tiers:
     get:
       tags:
@@ -798,6 +1160,57 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/LoyaltyTier"
+  /api/v1/flights/{flightId}/impact:
+    get:
+      tags:
+      - Flights
+      summary: "Hub: who is affected by a disruption, ranked by customer value"
+      description: "Joins the flight's passengers (Oracle) with their customers (Sybase):\
+        \ loyalty tier, points and completed-order spend. Passengers are ranked by\
+        \ priority (tier, cabin, retail spend) and each gets the base compensation\
+        \ for the flight's delay or cancellation and a tier-weighted suggested amount\
+        \ (Sybase's loyalty multiplier). Runs one job per cluster node on the data\
+        \ it owns."
+      operationId: impact
+      parameters:
+      - name: flightId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int32
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                type: object
+                additionalProperties:
+                  type: object
+  /api/v1/flights/{flightId}/events:
+    get:
+      tags:
+      - Flights
+      summary: Operational events for a flight
+      description: "Delays and cancellations, oldest first."
+      operationId: events
+      parameters:
+      - name: flightId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int32
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/FlightEvent"
   /api/v1/dashboard/summary:
     get:
       tags:
@@ -839,6 +1252,31 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/Series"
+  /api/v1/customers/{customerId}/trips:
+    get:
+      tags:
+      - Hub
+      summary: A customer's trips (Oracle)
+      description: "Runs the customer-trips job (replaces sp_customer_trips): upcoming\
+        \ trips, past trips and statistics. Returns an empty result for a customer\
+        \ with no bookings."
+      operationId: trips
+      parameters:
+      - name: customerId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int32
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                type: object
+                additionalProperties:
+                  type: object
   /api/v1/customers/{customerId}/score:
     get:
       tags:
@@ -898,6 +1336,33 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/PageLoyaltyTransaction"
+  /api/v1/customers/{customerId}/hub:
+    get:
+      tags:
+      - Hub
+      summary: "Hub: one customer view across BOTH source systems"
+      description: "Joins data that no single source holds. From Sybase: profile,\
+        \ loyalty tier and points, completed orders. From Oracle: bookings, miles,\
+        \ upcoming trips and the ones on delayed or cancelled flights. Also combines\
+        \ them: lifetime_value = retail spend + travel spend. Sections: profile, retail,\
+        \ travel, upcoming_trips, at_risk_trips, value."
+      operationId: hub
+      parameters:
+      - name: customerId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int32
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                type: object
+                additionalProperties:
+                  type: object
   /api/v1/customers/{customerId}/360:
     get:
       tags:
@@ -924,6 +1389,107 @@ paths:
                 type: object
                 additionalProperties:
                   type: object
+  /api/v1/compensation:
+    get:
+      tags:
+      - Hub
+      summary: List computed compensation
+      description: Written by POST /disruptions/process. Filter by customer (Sybase
+        id) or flight.
+      operationId: compensation
+      parameters:
+      - name: customerId
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+      - name: flightId
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+      - name: limit
+        in: query
+        required: false
+        schema:
+          maximum: 500
+          minimum: 1
+          type: integer
+          format: int32
+          default: 50
+      - name: offset
+        in: query
+        required: false
+        schema:
+          minimum: 0
+          type: integer
+          format: int32
+          default: 0
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PageCompensation"
+  /api/v1/bookings/{bookingId}:
+    get:
+      tags:
+      - Bookings
+      summary: Get a booking with its segments
+      operationId: get_6
+      parameters:
+      - name: bookingId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int32
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/Booking"
+  /api/v1/airports:
+    get:
+      tags:
+      - Airports
+      summary: List airports
+      description: "Reference data from the Oracle travel system, replicated to every\
+        \ GridGain node."
+      operationId: list_7
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Airport"
+  /api/v1/airports/{iata}:
+    get:
+      tags:
+      - Airports
+      summary: Get an airport by IATA code
+      operationId: get_7
+      parameters:
+      - name: iata
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/Airport"
 components:
   schemas:
     ProductInput:
@@ -1048,6 +1614,113 @@ components:
         paidAt:
           type: string
           format: date-time
+    FlightInput:
+      required:
+      - arrTime
+      - depTime
+      - destination
+      - distanceKm
+      - flightNo
+      - origin
+      type: object
+      properties:
+        flightNo:
+          maxLength: 8
+          minLength: 0
+          type: string
+        origin:
+          maxLength: 3
+          minLength: 3
+          type: string
+        destination:
+          maxLength: 3
+          minLength: 3
+          type: string
+        depTime:
+          type: string
+          format: date-time
+        arrTime:
+          type: string
+          format: date-time
+        distanceKm:
+          minimum: 1
+          type: integer
+          format: int32
+        aircraft:
+          maxLength: 10
+          minLength: 0
+          type: string
+        inventory:
+          type: array
+          description: Seat inventory per cabin. Required when creating; ignored by
+            PUT (inventory changes with bookings)
+          items:
+            $ref: "#/components/schemas/InventoryInput"
+    InventoryInput:
+      required:
+      - baseFare
+      - cabin
+      - seats
+      type: object
+      properties:
+        cabin:
+          pattern: ECONOMY|BUSINESS|FIRST
+          type: string
+        seats:
+          maximum: 600
+          minimum: 1
+          type: integer
+          format: int32
+        baseFare:
+          minimum: 0
+          type: number
+      description: Seat inventory per cabin. Required when creating; ignored by PUT
+        (inventory changes with bookings)
+    Flight:
+      type: object
+      properties:
+        flightId:
+          type: integer
+          format: int32
+        flightNo:
+          type: string
+        origin:
+          type: string
+        destination:
+          type: string
+        depTime:
+          type: string
+          format: date-time
+        arrTime:
+          type: string
+          format: date-time
+        distanceKm:
+          type: integer
+          format: int32
+        aircraft:
+          type: string
+        status:
+          type: string
+        delayMinutes:
+          type: integer
+          format: int32
+        inventory:
+          type: array
+          items:
+            $ref: "#/components/schemas/FlightInventory"
+    FlightInventory:
+      type: object
+      properties:
+        cabin:
+          type: string
+        seatsTotal:
+          type: integer
+          format: int32
+        seatsAvailable:
+          type: integer
+          format: int32
+        baseFare:
+          type: number
     CustomerInput:
       required:
       - email
@@ -1303,6 +1976,104 @@ components:
         loyaltyPoints:
           type: integer
           format: int32
+    DelayRequest:
+      required:
+      - minutes
+      type: object
+      properties:
+        minutes:
+          maximum: 1440
+          minimum: 1
+          type: integer
+          format: int32
+        reason:
+          maxLength: 150
+          minLength: 0
+          type: string
+    FlightOpResult:
+      type: object
+      properties:
+        flightId:
+          type: integer
+          format: int32
+        status:
+          type: string
+        affectedBookings:
+          type: integer
+          format: int64
+    CancelFlightRequest:
+      type: object
+      properties:
+        reason:
+          maxLength: 150
+          minLength: 0
+          type: string
+    BookFlightRequest:
+      required:
+      - cabin
+      - customerId
+      - flightId
+      - passenger
+      type: object
+      properties:
+        customerId:
+          type: integer
+          format: int32
+        flightId:
+          type: integer
+          format: int32
+        cabin:
+          pattern: ECONOMY|BUSINESS|FIRST
+          type: string
+        passenger:
+          maxLength: 80
+          minLength: 0
+          type: string
+        channel:
+          pattern: WEB|APP|CALL|AGENT
+          type: string
+          description: Defaults to WEB
+          enum:
+          - WEB
+          - APP
+          - CALL
+          - AGENT
+    BookFlightResult:
+      type: object
+      properties:
+        bookingId:
+          type: integer
+          format: int32
+        bookingRef:
+          type: string
+        customerId:
+          type: integer
+          format: int32
+        flightId:
+          type: integer
+          format: int32
+        cabin:
+          type: string
+        seatNo:
+          type: string
+        fare:
+          type: number
+        milesEarned:
+          type: integer
+          format: int32
+    CancelBookingResult:
+      type: object
+      properties:
+        bookingId:
+          type: integer
+          format: int32
+        refund:
+          type: number
+        segmentsCancelled:
+          type: integer
+          format: int32
+        bookingStatus:
+          type: string
     PageProduct:
       type: object
       properties:
@@ -1344,6 +2115,38 @@ components:
           type: number
         pointsMultiplier:
           type: number
+    PageFlight:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Flight"
+        limit:
+          type: integer
+          format: int32
+        offset:
+          type: integer
+          format: int32
+        total:
+          type: integer
+          format: int64
+    FlightEvent:
+      type: object
+      properties:
+        eventId:
+          type: integer
+          format: int32
+        flightId:
+          type: integer
+          format: int32
+        eventType:
+          type: string
+        detail:
+          type: string
+        eventTime:
+          type: string
+          format: date-time
     ApiStats:
       type: object
       properties:
@@ -1371,6 +2174,8 @@ components:
     CdcStatus:
       type: object
       properties:
+        source:
+          type: string
         running:
           type: boolean
         lastUpdate:
@@ -1379,7 +2184,7 @@ components:
         startedAt:
           type: string
           format: date-time
-        lastChangeId:
+        position:
           type: integer
           format: int64
         pendingEvents:
@@ -1406,9 +2211,6 @@ components:
         lastLatencyMs:
           type: integer
           format: int64
-        sybaseCountsAt:
-          type: string
-          format: date-time
     Cluster:
       type: object
       properties:
@@ -1434,11 +2236,16 @@ components:
         totalGridgainRows:
           type: integer
           format: int64
-        totalSybaseRows:
+        totalSourceRows:
           type: integer
           format: int64
+        sourceCountsAt:
+          type: string
+          format: date-time
         cdc:
-          $ref: "#/components/schemas/CdcStatus"
+          type: array
+          items:
+            $ref: "#/components/schemas/CdcStatus"
         api:
           $ref: "#/components/schemas/ApiStats"
     TableSize:
@@ -1446,10 +2253,12 @@ components:
       properties:
         name:
           type: string
+        source:
+          type: string
         gridgainRows:
           type: integer
           format: int64
-        sybaseRows:
+        sourceRows:
           type: integer
           format: int64
         difference:
@@ -1489,6 +2298,21 @@ components:
           type: integer
           format: int64
         cdcLatencyMs:
+          type: integer
+          format: int64
+        oraEventsPerSec:
+          type: number
+          format: double
+        oraUpsertsPerSec:
+          type: number
+          format: double
+        oraDeletesPerSec:
+          type: number
+          format: double
+        oraPending:
+          type: integer
+          format: int64
+        oraLatencyMs:
           type: integer
           format: int64
     Series:
@@ -1586,3 +2410,117 @@ components:
         total:
           type: integer
           format: int64
+    Compensation:
+      type: object
+      properties:
+        segmentId:
+          type: integer
+          format: int32
+        customerId:
+          type: integer
+          format: int32
+        amount:
+          type: number
+        reason:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    PageCompensation:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Compensation"
+        limit:
+          type: integer
+          format: int32
+        offset:
+          type: integer
+          format: int32
+        total:
+          type: integer
+          format: int64
+    Booking:
+      type: object
+      properties:
+        bookingId:
+          type: integer
+          format: int32
+        customerId:
+          type: integer
+          format: int32
+        bookingRef:
+          type: string
+        status:
+          type: string
+        bookedAt:
+          type: string
+          format: date-time
+        channel:
+          type: string
+        totalFare:
+          type: number
+        refunded:
+          type: number
+        currency:
+          type: string
+        segments:
+          type: array
+          items:
+            $ref: "#/components/schemas/BookingSegment"
+    BookingSegment:
+      type: object
+      properties:
+        segmentId:
+          type: integer
+          format: int32
+        bookingId:
+          type: integer
+          format: int32
+        flightId:
+          type: integer
+          format: int32
+        cabin:
+          type: string
+        seatNo:
+          type: string
+        passengerName:
+          type: string
+        fare:
+          type: number
+        status:
+          type: string
+        milesEarned:
+          type: integer
+          format: int32
+    PageBooking:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Booking"
+        limit:
+          type: integer
+          format: int32
+        offset:
+          type: integer
+          format: int32
+        total:
+          type: integer
+          format: int64
+    Airport:
+      type: object
+      properties:
+        iata:
+          type: string
+        name:
+          type: string
+        city:
+          type: string
+        country:
+          type: string
+        tz:
+          type: string

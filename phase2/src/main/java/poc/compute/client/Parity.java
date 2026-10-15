@@ -272,7 +272,7 @@ final class Parity {
         System.out.println("   " + (ok ? "PASS " : "FAIL ") + what + (ok ? "" : "  -> " + detail));
     }
 
-    private static List<List<Object>> readAll(ResultSet rs) throws SQLException {
+    static List<List<Object>> readAll(ResultSet rs) throws SQLException {
         List<List<Object>> out = new ArrayList<>();
         ResultSetMetaData md = rs.getMetaData();
         while (rs.next()) {
@@ -284,31 +284,31 @@ final class Parity {
         return out;
     }
 
-    private static List<List<Object>> readAll(Connection c, String sql) throws SQLException {
+    static List<List<Object>> readAll(Connection c, String sql) throws SQLException {
         try (Statement s = c.createStatement()) {
             return readAll(s.executeQuery(sql));
         }
     }
 
-    private static List<Integer> ints(Connection c, String sql) throws SQLException {
+    static List<Integer> ints(Connection c, String sql) throws SQLException {
         List<Integer> out = new ArrayList<>();
         for (List<Object> r : readAll(c, sql)) out.add(((Number) r.get(0)).intValue());
         return out;
     }
 
-    private static int scalarInt(Connection c, String sql) throws SQLException {
+    static int scalarInt(Connection c, String sql) throws SQLException {
         return ((Number) readAll(c, sql).get(0).get(0)).intValue();
     }
 
     /** Job result (list of column->value maps) as rows of values in column order. */
-    private static List<List<Object>> rows(List<?> maps) {
+    static List<List<Object>> rows(List<?> maps) {
         List<List<Object>> out = new ArrayList<>();
         for (Object m : maps) out.add(new ArrayList<>(((Map<?, ?>) m).values()));
         return out;
     }
 
     /** null when identical (within tolerance), otherwise a short description of the first difference. */
-    private static String compareRows(List<List<Object>> expected, List<List<Object>> actual) {
+    static String compareRows(List<List<Object>> expected, List<List<Object>> actual) {
         if (expected.size() != actual.size()) return "row count " + expected.size() + " vs " + actual.size();
         for (int i = 0; i < expected.size(); i++) {
             List<Object> e = expected.get(i), a = actual.get(i);
@@ -321,7 +321,7 @@ final class Parity {
     }
 
     /** Value equality tolerant of ASE/H2 differences: decimal scale, float precision, datetime rounding. */
-    private static boolean same(Object a, Object b) {
+    static boolean same(Object a, Object b) {
         if (a == null || b == null) return a == b;
         if (a instanceof Number && b instanceof Number) {
             return new BigDecimal(a.toString()).subtract(new BigDecimal(b.toString())).abs()
@@ -334,7 +334,7 @@ final class Parity {
         return a.equals(b);
     }
 
-    private static String env(String k, String d) {
+    static String env(String k, String d) {
         String v = System.getenv(k);
         return v == null || v.isBlank() ? d : v;
     }

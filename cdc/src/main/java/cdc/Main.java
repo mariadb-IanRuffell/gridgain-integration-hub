@@ -1,7 +1,12 @@
 package cdc;
 
 import java.sql.SQLException;
+import java.util.Set;
 
+/**
+ * CDC reader CLI.   run.sh init | run | once | status | verify
+ * Source selected with CDC_SOURCE=sybase (default) or oracle; connection settings from the environment.
+ */
 public final class Main {
     private static String env(String k, String d) {
         String v = System.getenv(k);
@@ -10,23 +15,23 @@ public final class Main {
 
     public static void main(String[] args) throws Exception {
         String cmd = args.length > 0 ? args[0] : "help";
-        String aseUrl = env("ASE_URL", "jdbc:jtds:sybase://llama.local:5000/testdb");
         String ggUrl = env("GG_URL", "jdbc:ignite:thin://127.0.0.1:10800,127.0.0.1:10801,127.0.0.1:10802");
         long intervalMs = Long.parseLong(env("CDC_POLL_MS", "1000"));
         int batch = Integer.parseInt(env("CDC_BATCH", "5000"));
 
-        if (!java.util.Set.of("init", "run", "once", "status", "verify").contains(cmd)) {
-            System.err.println("usage: run.sh init | run | once | status | verify");
+        if (!Set.of("init", "run", "once", "status", "verify").contains(cmd)) {
+            System.err.println("usage: run.sh init | run | once | status | verify   (CDC_SOURCE=sybase|oracle)");
             System.exit(2);
         }
-        try (Cdc cdc = new Cdc(aseUrl, env("ASE_USER", "tester"), env("ASE_PASSWORD", "guest1234"), ggUrl)) {
+        String source = env("CDC_SOURCE", "sybase");
+        try (CdcSource cdc = open(source, ggUrl)) {
             switch (cmd) {
                 case "init" -> cdc.init();
                 case "status" -> cdc.status();
                 case "verify" -> System.exit(cdc.verify() ? 0 : 1);
                 case "once" -> {
-                    Cdc.Result r = cdc.applyOnce(batch);
-                    System.out.printf("events=%d upserts=%d deletes=%d offset=%d%n", r.events(), r.upserts(), r.deletes(), r.lastChangeId());
+                    Result r = cdc.applyOnce(batch);
+                    System.out.printf("events=%d upserts=%d deletes=%d position=%d%n", r.events(), r.upserts(), r.deletes(), r.lastChangeId());
                 }
                 case "run" -> stream(cdc, batch, intervalMs);
                 default -> { }
@@ -34,17 +39,30 @@ public final class Main {
         }
     }
 
-    private static void stream(Cdc cdc, int batch, long intervalMs) throws Exception {
-        System.out.println("streaming Sybase -> GridGain (poll " + intervalMs + " ms, batch " + batch + "); Ctrl-C to stop");
+    private static CdcSource open(String source, String ggUrl) throws SQLException {
+        switch (source) {
+            case "sybase":
+                return new Cdc(env("ASE_URL", "jdbc:jtds:sybase://llama.local:5000/testdb"), env("ASE_USER", "tester"),
+                    env("ASE_PASSWORD", "guest1234"), ggUrl);
+            case "oracle":
+                return new OracleCdc(env("ORA_URL", "jdbc:oracle:thin:@//localhost:1521/FREEPDB1"), env("ORA_USER", "travel"),
+                    env("ORA_PASSWORD", "travel"), ggUrl);
+            default:
+                throw new IllegalArgumentException("CDC_SOURCE must be sybase or oracle, not " + source);
+        }
+    }
+
+    private static void stream(CdcSource cdc, int batch, long intervalMs) throws Exception {
+        System.out.println(cdc.consumer() + " -> GridGain (poll " + intervalMs + " ms, batch " + batch + "); Ctrl-C to stop");
         Metrics metrics = new Metrics(cdc);
         metrics.ensureTables();
         while (true) {
             try {
-                Cdc.Result r = cdc.applyOnce(batch);
+                Result r = cdc.applyOnce(batch);
                 metrics.record(r);
                 metrics.tick();
                 if (r.events() > 0) {
-                    System.out.printf("%tT applied events=%d upserts=%d deletes=%d offset=%d%n",
+                    System.out.printf("%tT applied events=%d upserts=%d deletes=%d position=%d%n",
                         new java.util.Date(), r.events(), r.upserts(), r.deletes(), r.lastChangeId());
                 } else {
                     Thread.sleep(intervalMs);
