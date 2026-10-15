@@ -16,6 +16,7 @@ SCENES_URL = "http://127.0.0.1:8099/scenes/index.html"
 DASH_URL = "http://localhost:8080/"
 INJECT = open("inject.js").read()
 NARR = {n["id"]: n["text"] for n in json.load(open("data/narration.json"))}
+VOICE = os.environ.get("VOICE", "af_heart")   # Kokoro voice id, e.g. af_heart, bf_emma
 LEAD = 0.6   # seconds of picture before the voice starts
 
 
@@ -29,13 +30,11 @@ def audio_len(name):
 
 
 def ensure_audio(name):
-    """Neural voice: Piper (UK female 'Alba') running in Docker. Model and engine live in tts/ (see README)."""
+    """Neural voice: Kokoro-82M (kokoro-onnx) in Docker. Image from tts/Dockerfile, model files in tts/kokoro/ (see README)."""
     if not os.path.exists(f"audio/{name}.wav"):
-        os.makedirs("audio", exist_ok=True)
-        subprocess.run(["docker", "run", "--rm", "-i", "--entrypoint", "/tts/linux/piper/piper", "-v", f"{ROOT}/tts:/tts",
-                        "eclipse-temurin:17-jre", "--model", "/tts/alba.onnx", "--config", "/tts/alba.onnx.json",
-                        "--length_scale", "1.05", "--sentence_silence", "0.4", "--output_file", f"/tts/out/{name}.wav"],
-                       input=NARR[name], text=True, check=True)
+        os.makedirs("audio", exist_ok=True); os.makedirs("tts/out", exist_ok=True)
+        subprocess.run(["docker", "run", "--rm", "-i", "-v", f"{ROOT}/tts:/tts", "kokoro-tts", "python", "/tts/kokoro_say.py",
+                        VOICE, f"/tts/out/{name}.wav"], input=NARR[name], text=True, check=True)
         os.replace(f"tts/out/{name}.wav", f"audio/{name}.wav")
     return audio_len(name)
 

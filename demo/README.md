@@ -15,11 +15,10 @@ SCN-race and summary slides are drawn.
 | 9 Resilience | GridGain node 3 is really killed and restarted under REST traffic and both loads |
 | 10 Dashboard | both CDC loads and REST traffic at the same time |
 
-Voice-over is the neural voice [Piper](https://github.com/rhasspy/piper) "Alba" (UK female), run in Docker (`eclipse-temurin:17-jre`
-image, Linux arm64 Piper build). The engine and model are not committed: download the Piper `piper_linux_aarch64` release into
-`demo/tts/linux/piper/` and `en_GB-alba-medium.onnx` plus its `.json` from the `rhasspy/piper-voices` Hugging Face repo
-as `demo/tts/alba.onnx` and `demo/tts/alba.onnx.json`; create `demo/tts/out/`. Edit `data/narration.json` and delete
-`audio/<id>.wav` to re-voice a scene.
+Voice-over is the neural voice [Kokoro-82M](https://github.com/thewh1teagle/kokoro-onnx) (default `af_heart`; set `VOICE=bf_emma` for UK English),
+run in Docker. Build the image with `docker build -t kokoro-tts tts` and download `kokoro-v1.0.onnx` and `voices-v1.0.bin` from the
+kokoro-onnx `model-files-v1.0` release into `demo/tts/kokoro/` (about 350 MB, not committed). Edit `data/narration.json` and delete
+`audio/<id>.wav` to re-voice a scene. (Earlier versions used macOS `say`, then Piper.)
 
 ## Rebuild
 
