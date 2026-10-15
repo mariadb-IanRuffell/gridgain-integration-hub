@@ -1,0 +1,18 @@
+[
+  {
+    "cmd": "curl -s localhost:8080/api/v1/customers/72/hub | jq '{customer: .profile[0] | {first_name, last_name, loyalty_tier}, retail: .retail[0], travel: .travel[0], value: .value[0], trips_at_risk: (.at_risk_trips | length)}'",
+    "out": "{\"customer\":{\"first_name\":\"Aisha\",\"last_name\":\"Rossi\",\"loyalty_tier\":\"PLATINUM\"},\"retail\":{\"orders\":15,\"retail_spend\":60670.00},\"travel\":{\"bookings\":2,\"travel_spend\":6070.0,\"miles\":21880},\"value\":{\"loyalty_tier\":\"PLATINUM\",\"loyalty_points\":72632,\"retail_spend\":60670.00,\"travel_spend\":6070.0,\"lifetime_value\":66740.00,\"travel_share_pct\":9.1},\"trips_at_risk\":1}"
+  },
+  {
+    "cmd": "curl -s localhost:8080/api/v1/flights/134/impact | jq '{passengers: (.passengers | length), by_tier, total_suggested_compensation, top: [.passengers[:3][] | {last_name, loyalty_tier, cabin, priority, suggested_compensation}]}'",
+    "out": "{\"passengers\":8,\"by_tier\":[{\"loyalty_tier\":\"GOLD\",\"passengers\":5,\"base_compensation\":9855.00,\"suggested_compensation\":14782.50},{\"loyalty_tier\":\"PLATINUM\",\"passengers\":3,\"base_compensation\":5475.00,\"suggested_compensation\":10950.00}],\"total_suggested_compensation\":25732.50,\"top\":[{\"last_name\":\"Ivanov\",\"loyalty_tier\":\"PLATINUM\",\"cabin\":\"BUSINESS\",\"priority\":429,\"suggested_compensation\":6570.00},{\"last_name\":\"Taylor\",\"loyalty_tier\":\"PLATINUM\",\"cabin\":\"ECONOMY\",\"priority\":419,\"suggested_compensation\":2190.00},{\"last_name\":\"Tanaka\",\"loyalty_tier\":\"PLATINUM\",\"cabin\":\"ECONOMY\",\"priority\":416,\"suggested_compensation\":2190.00}]}"
+  },
+  {
+    "cmd": "curl -s -X POST localhost:8080/api/v1/bookings -H 'Content-Type: application/json' \\\n     -d '{\"customerId\":72,\"flightId\":143,\"cabin\":\"BUSINESS\",\"passenger\":\"Marco Rossi\"}' | jq",
+    "out": "{\"bookingId\":1000002001,\"bookingRef\":\"WNGJNO\",\"customerId\":72,\"flightId\":143,\"cabin\":\"BUSINESS\",\"seatNo\":\"3A\",\"fare\":4552.5,\"milesEarned\":8205}"
+  },
+  {
+    "cmd": "curl -s -X POST localhost:8080/api/v1/bookings -H 'Content-Type: application/json' \\\n     -d '{\"customerId\":72,\"flightId\":143,\"cabin\":\"PREMIUM\",\"passenger\":\"Marco Rossi\"}' | jq -r .detail",
+    "out": "cabin must match \"ECONOMY|BUSINESS|FIRST\""
+  }
+]

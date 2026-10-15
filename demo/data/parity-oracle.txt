@@ -1,0 +1,40 @@
+== sp_customer_trips vs TripsTask (every customer with bookings, plus one without)
+   PASS sp_customer_trips parity over 204 customers x 3 result sets
+== sp_book_flight vs BookFlightTask
+   customer 12, flight 2, BUSINESS
+   PASS starting inventory identical
+   PASS booking, segment, seat, fare and miles identical
+   PASS booking_ref is 6 letters
+   PASS seat inventory identical afterwards
+== sp_cancel_booking vs CancelBookingTask
+   PASS full cancellation of booking 1: refund 15660.0
+   PASS full cancellation of booking 1: booking status, refunded and segment statuses identical
+   PASS full cancellation of booking 1: seats released identically
+   PASS partial cancellation of booking 5: refund 810.0
+   PASS partial cancellation of booking 5: booking status, refunded and segment statuses identical
+   PASS partial cancellation of booking 5: seats released identically
+== sp_record_delay / sp_cancel_flight vs RecordDelayTask
+   PASS delay flight 2: affected bookings 8
+   PASS flight status and delay identical
+   PASS flight event type and text identical
+   PASS cancel flight 6: affected bookings 5
+   PASS cancelled flight status and event identical
+== sp_process_disruptions (cursor) vs ProcessDisruptionsTask (per node)
+   PASS summary by reason (reason, segments, total_amount)
+   PASS compensation identical for the 78 seeded segments (id, amount, reason, created_at)
+   PASS compensation for the test booking identical apart from its id (amount, reason, created_at)
+== error behaviour: same error number for the same bad input
+   PASS book: unknown flight: Oracle raises 20103, job returns 20103
+   PASS book: invalid cabin: Oracle raises 20105, job returns 20105
+   PASS book: blank passenger: Oracle raises 20104, job returns 20104
+   PASS book: flight already operated: Oracle raises 20106, job returns 20106
+   PASS book: cabin sold out: Oracle raises 20107, job returns 20107
+   PASS cancel booking: not found: Oracle raises 20110, job returns 20110
+   PASS cancel booking: already cancelled: Oracle raises 20111, job returns 20111
+   PASS delay: out of range: Oracle raises 20120, job returns 20120
+   PASS delay: unknown flight: Oracle raises 20103, job returns 20103
+   PASS delay: flight is cancelled: Oracle raises 20121, job returns 20121
+   PASS cancel flight: already cancelled: Oracle raises 20121, job returns 20121
+
+PARITY OK: 30 checks passed, 0 failed
+   NOTE: Oracle and GridGain now hold different test rows. Resync: CDC_SOURCE=oracle ../cdc/run.sh init, then start gg-cdc-oracle

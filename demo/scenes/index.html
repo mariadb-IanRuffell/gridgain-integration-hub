@@ -1,7 +1,7 @@
 <!doctype html>
 <html><head><meta charset="utf-8"><title>demo scenes</title>
 <style>
-:root { --bg1:#0a1120; --bg2:#12203b; --ink:#e8eefc; --mut:#8b98b3; --ase:#f59e0b; --gg:#2dd4bf; --api:#60a5fa; --bad:#fb7185; --ok:#4ade80; }
+:root { --bg1:#0a1120; --bg2:#12203b; --ink:#e8eefc; --mut:#8b98b3; --ase:#f59e0b; --ora:#ef4444; --gg:#2dd4bf; --api:#60a5fa; --bad:#fb7185; --ok:#4ade80; }
 * { box-sizing: border-box; margin: 0; }
 html, body { width: 1920px; height: 1080px; overflow: hidden; }
 body { background: radial-gradient(1200px 800px at 30% 20%, var(--bg2), var(--bg1)); color: var(--ink);
@@ -15,43 +15,58 @@ h2 { font-size: 58px; font-weight: 650; letter-spacing: -1px; }
 .sub { color: var(--mut); font-size: 38px; }
 .chip { display: inline-block; border: 2px solid #2a3b60; background: #14213d; border-radius: 14px; padding: 9px 20px; margin: 6px 8px 6px 0; font-size: 27px; }
 .mono { font-family: "SF Mono", Menlo, Consolas, monospace; }
-.c-ase { color: var(--ase); } .c-gg { color: var(--gg); } .c-api { color: var(--api); }
+.c-ase { color: var(--ase); } .c-ora { color: var(--ora); } .c-gg { color: var(--gg); } .c-api { color: var(--api); }
 
 /* s1 */
-#s1 { display: none; text-align: center; padding-top: 300px; }
-#s1.on { display: block; }
+#s1 { text-align: center; padding-top: 290px; }
 #s1 .chips { margin-top: 70px; }
 #s1 .chip { font-size: 36px; padding: 16px 34px; }
 
 /* s2 diagram */
-.box { position: absolute; border-radius: 26px; border: 3px solid; background: #101b33; padding: 22px 20px; text-align: center; }
-.box b { display: block; font-size: 44px; margin-bottom: 6px; }
-.box small { color: var(--mut); font-size: 27px; display: block; line-height: 1.3; }
-#b-ase { left: 80px; top: 360px; width: 340px; height: 250px; border-color: var(--ase); }
-#b-cdc { left: 520px; top: 395px; width: 300px; height: 180px; border-color: #7aa2ff; }
-#b-gg { left: 930px; top: 270px; width: 470px; height: 440px; border-color: var(--gg); }
-#b-api { left: 1530px; top: 395px; width: 300px; height: 180px; border-color: var(--api); }
-#b-jobs { left: 930px; top: 150px; width: 470px; height: 90px; border-color: var(--gg); border-style: dashed; padding-top: 18px; }
-#b-jobs b { font-size: 36px; margin: 0; }
-.node { display: inline-block; width: 118px; height: 118px; border-radius: 50%; border: 3px solid var(--gg); margin: 22px 8px 0; line-height: 112px; font-size: 26px; background: #0f2a2e; }
+.box { position: absolute; border-radius: 26px; border: 3px solid; background: #101b33; padding: 18px 20px; text-align: center; }
+.box b { display: block; font-size: 42px; margin-bottom: 4px; }
+.box small { color: var(--mut); font-size: 26px; display: block; line-height: 1.3; }
+#b-ase { left: 70px; top: 250px; width: 330px; height: 210px; border-color: var(--ase); }
+#b-ora { left: 70px; top: 510px; width: 330px; height: 210px; border-color: var(--ora); }
+#b-cdc1 { left: 500px; top: 280px; width: 250px; height: 150px; border-color: #7aa2ff; padding-top: 22px; }
+#b-cdc2 { left: 500px; top: 540px; width: 250px; height: 150px; border-color: #7aa2ff; padding-top: 22px; }
+#b-cdc1 b, #b-cdc2 b { font-size: 34px; }
+#b-gg { left: 860px; top: 230px; width: 470px; height: 500px; border-color: var(--gg); }
+#b-api { left: 1470px; top: 400px; width: 360px; height: 190px; border-color: var(--api); }
+#b-jobs { left: 860px; top: 120px; width: 470px; height: 80px; border-color: var(--gg); border-style: dashed; padding-top: 14px; }
+#b-jobs b { font-size: 34px; margin: 0; }
+.node { display: inline-block; width: 118px; height: 118px; border-radius: 50%; border: 3px solid var(--gg); margin: 18px 8px 0; line-height: 112px; font-size: 26px; background: #0f2a2e; }
 svg#arrows { position: absolute; inset: 0; width: 1920px; height: 1080px; pointer-events: none; }
 svg path { fill: none; stroke-width: 6; stroke-linecap: round; }
 .arrow { opacity: 0; transition: opacity .8s; } .arrow.show { opacity: 1; }
 .phase { position: absolute; font-size: 36px; font-weight: 650; border-radius: 14px; padding: 12px 26px; opacity: 0; transition: opacity .8s, transform .8s; transform: translateY(14px); }
 .phase.show { opacity: 1; transform: none; }
-#p1 { left: 600px; top: 800px; background: #1b2a52; color: #9db8ff; }
-#p2 { left: 1010px; top: 800px; background: #12332f; color: var(--gg); }
-#p3 { left: 80px; top: 800px; background: #3a2a0e; color: var(--ase); }
-#b-ase.retired { border-style: dashed; opacity: .55; }
-#strike { position: absolute; left: 60px; top: 470px; width: 380px; height: 6px; background: var(--bad); transform: rotate(-12deg); opacity: 0; transition: opacity .8s; }
-#strike.show { opacity: 1; }
+#p1 { left: 110px; top: 890px; background: #1b2a52; color: #9db8ff; }
+#p2 { left: 960px; top: 890px; background: #12332f; color: var(--gg); }
+#join { position: absolute; left: 880px; top: 745px; width: 430px; text-align: center; font-size: 30px; color: var(--gg); opacity: 0; transition: opacity .8s; }
+#join.show { opacity: 1; }
 
-/* s3 */
-#s3 .left { position: absolute; left: 110px; top: 80px; width: 780px; }
-#s3 .right { position: absolute; left: 930px; top: 90px; width: 880px; }
-.code { background: #0b1326; border: 2px solid #26365a; border-radius: 22px; padding: 28px 34px; font-size: 24px; line-height: 1.45; color: #cfe0ff; height: 770px; overflow: hidden; white-space: pre-wrap; word-break: break-word; }
-.code .k { color: #c792ea; } .code .f { color: #7aa2ff; } .code .s { color: #ecc48d; } .code .n { color: #f78c6c; } .code .cm { color: #6b7ea5; }
-.cardtitle { color: var(--mut); font-size: 28px; margin-bottom: 12px; }
+/* s3: two systems */
+#s3 .col { position: absolute; top: 200px; width: 800px; }
+#s3 .col h3 { font-size: 46px; margin-bottom: 6px; }
+#s3 .col .sub2 { color: var(--mut); font-size: 28px; margin-bottom: 20px; }
+#s3 .lbl { color: var(--mut); font-size: 24px; margin: 22px 0 6px; text-transform: uppercase; letter-spacing: .06em; }
+#key { position: absolute; left: 110px; right: 110px; bottom: 100px; text-align: center; font-size: 44px; color: var(--gg); border: 2px dashed #1c5d58; border-radius: 22px; padding: 22px; background: #0d2227; }
+
+/* s5: commit-SCN race */
+#s5 .ttl { position: absolute; left: 110px; top: 60px; }
+.lane { position: absolute; left: 110px; width: 1700px; height: 120px; border-radius: 18px; background: #0f1a30; border: 2px solid #1e2c4b; }
+.lane > span { position: absolute; left: 22px; top: 36px; font-size: 30px; color: var(--mut); }
+#lane-a { top: 220px; } #lane-b { top: 380px; } #lane-r { top: 590px; height: 150px; }
+.ev { position: absolute; top: 28px; padding: 12px 22px; border-radius: 12px; font-size: 28px; white-space: nowrap; border: 2px solid; }
+.ev.ins { background: #17233f; border-color: #3a527f; color: #bcd0ff; }
+.ev.com { background: #10301f; border-color: #2b7a49; color: var(--ok); }
+.ev.win { background: #12332f; border-color: #1f8a7d; color: var(--gg); top: 24px; height: 100px; line-height: 1.25; padding-top: 14px; }
+.ev.pending { border-style: dashed; }
+#lane-a .ev, #lane-b .ev { top: 34px; }
+#naive { position: absolute; left: 110px; width: 820px; top: 790px; border: 3px solid #7a2c3a; background: #2a1219; border-radius: 18px; padding: 18px 26px; font-size: 32px; color: var(--bad); }
+#safe { position: absolute; left: 990px; width: 820px; top: 790px; border: 3px solid #2b7a49; background: #0f2a1b; border-radius: 18px; padding: 18px 26px; font-size: 32px; color: var(--ok); }
+#s5 small { display: block; color: var(--mut); font-size: 25px; margin-top: 4px; }
 
 /* terminal */
 .term { position: absolute; inset: 70px 90px; background: #0a0f1c; border: 2px solid #26365a; border-radius: 22px; overflow: hidden; display: flex; flex-direction: column; }
@@ -63,75 +78,101 @@ svg path { fill: none; stroke-width: 6; stroke-linecap: round; }
 .cursor { display: inline-block; width: 14px; height: 30px; background: #cfe0ff; vertical-align: -5px; animation: blink 1s steps(1) infinite; }
 @keyframes blink { 50% { opacity: 0; } }
 
-/* s9 */
-#s9 ul { list-style: none; margin-top: 60px; }
-#s9 li { font-size: 46px; margin: 34px 0; padding-left: 70px; position: relative; }
-#s9 li::before { content: "✓"; position: absolute; left: 0; color: var(--ok); font-weight: 700; }
-#s9 .next { margin-top: 70px; font-size: 42px; color: var(--ase); }
-#s9 .foot { position: absolute; left: 110px; bottom: 60px; color: var(--mut); font-size: 26px; }
+/* closing */
+#s11 ul { list-style: none; margin-top: 60px; }
+#s11 li { font-size: 46px; margin: 34px 0; padding-left: 70px; position: relative; }
+#s11 li::before { content: "✓"; position: absolute; left: 0; color: var(--ok); font-weight: 700; }
+#s11 .foot { position: absolute; left: 110px; bottom: 60px; color: var(--mut); font-size: 26px; }
 </style></head>
 <body>
 
 <section class="scene" id="s1">
-  <h1 class="fade" id="s1a">From <span class="c-ase">Sybase</span> to <span class="c-gg">GridGain</span></h1>
-  <div class="sub fade" id="s1b" style="margin-top:34px">A two-phase migration, proven end to end</div>
-  <div class="chips fade" id="s1c"><span class="chip">① Replicate with CDC</span><span class="chip">② Procedures become compute jobs</span></div>
+  <h1 class="fade" id="s1a">From <span class="c-ase">Sybase</span> and <span class="c-ora">Oracle</span> to <span class="c-gg">GridGain</span></h1>
+  <div class="sub fade" id="s1b" style="margin-top:34px">Two source systems, one data hub</div>
+  <div class="chips fade" id="s1c"><span class="chip">Replicate with CDC</span><span class="chip">Procedures become compute jobs</span><span class="chip">Join both systems in one place</span></div>
 </section>
 
 <section class="scene" id="s2">
-  <h2 class="fade" id="s2t" style="position:absolute;left:90px;top:60px">Two phases, one destination</h2>
+  <h2 class="fade" id="s2t" style="position:absolute;left:70px;top:50px">Two phases, one hub</h2>
   <svg id="arrows" viewBox="0 0 1920 1080">
     <defs><marker id="ah" markerWidth="10" markerHeight="10" refX="6" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#7aa2ff" style="stroke:none"/></marker>
           <marker id="ah2" markerWidth="10" markerHeight="10" refX="6" refY="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#60a5fa" style="stroke:none"/></marker></defs>
-    <path id="a1" class="arrow" d="M425,485 L510,485" stroke="#7aa2ff" marker-end="url(#ah)"/>
-    <path id="a2" class="arrow" d="M825,485 L920,485" stroke="#7aa2ff" marker-end="url(#ah)"/>
-    <path id="a3" class="arrow" d="M1405,485 L1520,485" stroke="#60a5fa" marker-end="url(#ah2)"/>
-    <path id="a4" class="arrow" d="M1165,262 L1165,250" stroke="#2dd4bf"/>
+    <path id="a1" class="arrow" d="M405,355 L490,355" stroke="#7aa2ff" marker-end="url(#ah)"/>
+    <path id="a2" class="arrow" d="M405,605 L490,605" stroke="#7aa2ff" marker-end="url(#ah)"/>
+    <path id="a3" class="arrow" d="M755,355 C810,355 800,400 850,420" stroke="#7aa2ff" marker-end="url(#ah)"/>
+    <path id="a4" class="arrow" d="M755,605 C810,605 800,560 850,540" stroke="#7aa2ff" marker-end="url(#ah)"/>
+    <path id="a5" class="arrow" d="M1335,495 L1460,495" stroke="#60a5fa" marker-end="url(#ah2)"/>
+    <path id="a6" class="arrow" d="M1095,222 L1095,235" stroke="#2dd4bf"/>
   </svg>
-  <div class="box fade" id="b-ase"><b class="c-ase">Sybase ASE</b><small>system of record<br>triggers log every change</small></div>
-  <div class="box fade" id="b-cdc"><b style="color:#9db8ff">CDC reader</b><small>streams the log<br>into GridGain</small></div>
-  <div class="box fade" id="b-gg"><b class="c-gg">GridGain cluster</b><small>3 nodes · native persistence · backups</small>
+  <div class="box fade" id="b-ase"><b class="c-ase">Sybase ASE</b><small>customers, orders, loyalty<br>6 stored procedures</small></div>
+  <div class="box fade" id="b-ora"><b class="c-ora">Oracle</b><small>flights, bookings, inventory<br>5 stored procedures</small></div>
+  <div class="box fade" id="b-cdc1"><b style="color:#9db8ff">CDC reader</b><small>triggers + log</small></div>
+  <div class="box fade" id="b-cdc2"><b style="color:#9db8ff">CDC reader</b><small>triggers + commit SCN</small></div>
+  <div class="box fade" id="b-gg"><b class="c-gg">GridGain cluster</b><small>3 nodes · native persistence</small>
     <div><span class="node mono">node1</span><span class="node mono">node2</span><span class="node mono">node3</span></div>
-    <small style="margin-top:26px">customer data colocated by customer_id</small></div>
-  <div class="box fade" id="b-jobs"><b class="c-gg">6 compute jobs</b></div>
-  <div class="box fade" id="b-api"><b class="c-api">REST API</b><small>OpenAPI · live dashboard</small></div>
-  <div class="phase" id="p1">PHASE 1 · replicate</div>
-  <div class="phase" id="p2">PHASE 2 · re-implement</div>
+    <small style="margin-top:22px">Sybase and Oracle data colocated<br>by customer_id</small></div>
+  <div id="join">join on customer_id · no data movement</div>
+  <div class="box fade" id="b-jobs"><b class="c-gg">11 compute jobs</b></div>
+  <div class="box fade" id="b-api"><b class="c-api">REST API</b><small>CRUD · operations · hub<br>live dashboard</small></div>
+  <div class="phase" id="p1">PHASE 1 · replicate both sources</div>
+  <div class="phase" id="p2">PHASE 2 · re-implement the procedures</div>
 </section>
 
 <section class="scene" id="s3">
-  <div class="left">
-    <h2 class="fade" id="s3t">Customer 360 in Sybase</h2>
-    <div class="sub fade" id="s3s" style="margin:6px 0 26px;font-size:32px">10 tables · 250 customers · 6 procedures</div>
-    <div id="tables"></div>
-    <div class="cardtitle" style="margin-top:26px;font-size:26px">Stored procedures to migrate</div>
-    <div id="procs"></div>
+  <h2 class="fade" id="s3t" style="position:absolute;left:110px;top:60px">Two systems, different data</h2>
+  <div class="col" style="left:110px">
+    <h3 class="c-ase fade" id="c1h">Sybase ASE · customers</h3>
+    <div class="sub2 fade" id="c1s">CRM and commerce, 250 customers</div>
+    <div class="lbl fade" id="c1l1">tables</div>
+    <div id="sy-t"></div>
+    <div class="lbl fade" id="c1l2">stored procedures</div>
+    <div id="sy-p"></div>
   </div>
-  <div class="right">
-    <div class="cardtitle fade" id="s3c">sp_add_order_item (excerpt): stock check inside a transaction</div>
-    <div class="code mono fade" id="code"></div>
+  <div class="col" style="left:1010px">
+    <h3 class="c-ora fade" id="c2h">Oracle · travel</h3>
+    <div class="sub2 fade" id="c2s">Reservations, 238 flights, 650 bookings</div>
+    <div class="lbl fade" id="c2l1">tables</div>
+    <div id="or-t"></div>
+    <div class="lbl fade" id="c2l2">PL/SQL procedures</div>
+    <div id="or-p"></div>
   </div>
+  <div id="key" class="fade">They share one thing: the <b>customer_id</b>. That is the hub's join key.</div>
+</section>
+
+<section class="scene" id="s5">
+  <h2 class="ttl fade" id="s5t">Oracle readers never wait for uncommitted work</h2>
+  <div class="lane" id="lane-a"><span>Session A</span>
+    <div class="ev ins pending fade" id="ev-a1" style="left:300px">insert change, id 1</div>
+    <div class="ev com fade" id="ev-a2" style="left:1160px">commit · SCN 356</div></div>
+  <div class="lane" id="lane-b"><span>Session B</span>
+    <div class="ev ins fade" id="ev-b1" style="left:420px">insert change, id 2</div>
+    <div class="ev com fade" id="ev-b2" style="left:760px">commit · SCN 328</div></div>
+  <div class="lane" id="lane-r"><span>Reader</span>
+    <div class="ev win fade" id="ev-w1" style="left:300px">window (300, 330]<small>reads: id 2</small></div>
+    <div class="ev win fade" id="ev-w2" style="left:1100px">window (330, 360]<small>reads: id 1</small></div></div>
+  <div id="naive" class="fade"><b>Polling by id:</b> sees id 2, moves past id 1, and never reads it. The change is lost.<small>Oracle readers do not block on uncommitted rows.</small></div>
+  <div id="safe" class="fade"><b>Reading by commit SCN:</b> id 1 was not committed in the first window, so it lands in the next. Nothing is lost.<small>ROWDEPENDENCIES gives every log row its own commit SCN.</small></div>
 </section>
 
 <section class="scene" id="term"><div class="term">
   <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span id="termtitle" style="margin-left:18px"></span></div>
   <div class="body" id="termbody"></div></div></section>
 
-<section class="scene" id="s9">
-  <h2 class="fade" id="s9t">What the demo showed</h2>
-  <ul><li class="fade">Every Sybase change reaches GridGain within about a second, and table sizes match row for row</li>
-      <li class="fade">Six stored procedures run as compute jobs with identical results: 16 of 16 parity checks</li>
-      <li class="fade">A 3-node persistent cluster loses a node and keeps serving, then rejoins with its data</li></ul>
-  <div class="foot fade">Sybase ASE itself runs on a Linux server: this 2015 build cannot run on an Apple Silicon Mac</div>
+<section class="scene" id="s11">
+  <h2 class="fade" id="s11t">What the demo showed</h2>
+  <ul><li class="fade">Sybase and Oracle changes reach GridGain within about a second, and every table matches its source</li>
+      <li class="fade">Eleven stored procedures run as compute jobs with identical results: 16 + 30 parity checks</li>
+      <li class="fade">Customer data from both systems joins on one node: queries and APIs neither system could offer</li>
+      <li class="fade">A 3-node persistent cluster loses a node, keeps serving, and rejoins with its data</li></ul>
+  <div class="foot fade">Sybase ASE runs on a Linux server (this 2015 build cannot run on an Apple Silicon Mac); Oracle runs locally in Docker</div>
 </section>
 
 <script>
 const q = new URLSearchParams(location.search), scene = q.get('scene'), D = parseFloat(q.get('d') || '20'), kind = q.get('kind');
 const $ = id => document.getElementById(id);
-const show = (id, extra = '') => $(id) && $(id).classList.add('show');
+const show = id => $(id) && $(id).classList.add('show');
 const at = (sec, fn) => setTimeout(fn, sec * 1000);
-const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
-
+function typeInto(el, text, ms, done) { let i = 0; const t = setInterval(() => { el.textContent = text.slice(0, ++i); if (i >= text.length) { clearInterval(t); done && done(); } }, ms); }
 function pretty(out) {   // top-level keys on their own lines; values compact but with spaces so lines wrap at spaces
   try {
     const o = JSON.parse(out);
@@ -142,7 +183,10 @@ function pretty(out) {   // top-level keys on their own lines; values compact bu
   } catch (e) {}
   return out;
 }
-function typeInto(el, text, ms, done) { let i = 0; const t = setInterval(() => { el.textContent = text.slice(0, ++i); if (i >= text.length) { clearInterval(t); done && done(); } }, ms); }
+const chips = (id, items, cls, base, step, start) => {
+  $(id).innerHTML = items.map((t, i) => `<span class="chip mono fade ${cls}" id="${id}${i}">${t}</span>`).join('');
+  items.forEach((_, i) => at(start + i * step, () => show(id + i)));
+};
 
 async function run() {
   if (scene === 's1') {
@@ -150,41 +194,63 @@ async function run() {
   }
   if (scene === 's2') {
     $('s2').classList.add('on');
-    at(0.2, () => show('s2t')); at(0.9, () => show('b-ase'));
-    at(D * 0.17, () => { ['b-cdc', 'b-gg'].forEach(show); ['a1', 'a2'].forEach(show); show('p1'); });
-    at(D * 0.50, () => { show('b-jobs'); show('b-api'); show('a3'); show('a4'); show('p2'); });
+    at(0.2, () => show('s2t')); at(0.9, () => { show('b-ase'); show('b-ora'); });
+    at(D * 0.22, () => { ['b-cdc1', 'b-cdc2', 'b-gg', 'a1', 'a2', 'a3', 'a4', 'p1'].forEach(show); });
+    at(D * 0.52, () => { ['b-jobs', 'b-api', 'a5', 'a6', 'p2'].forEach(show); });
+    at(D * 0.80, () => show('join'));
   }
   if (scene === 's3') {
     $('s3').classList.add('on');
-    const tables = ['customer', 'address', 'orders', 'order_item', 'payment', 'interaction', 'loyalty_txn', 'product', 'customer_score', 'loyalty_tier_rule'];
-    const procs = ['sp_customer_360', 'sp_recalc_loyalty_tier', 'sp_create_order', 'sp_add_order_item', 'sp_complete_order', 'sp_score_customers'];
-    $('tables').innerHTML = tables.map((t, i) => `<span class="chip mono fade" id="t${i}">${t}</span>`).join('');
-    $('procs').innerHTML = procs.map((t, i) => `<span class="chip mono c-gg fade" style="border-color:#1c5d58" id="pr${i}">${t}</span>`).join('');
-    let code = await (await fetch('../data/proc.txt')).text();
-    const lines = code.split('\n'), ind = Math.min(...lines.filter(l => l.trim()).map(l => l.match(/^ */)[0].length));
-    code = lines.map(l => l.slice(ind)).join('\n');
-    $('code').innerHTML = esc(code).replace(/\b(begin|end|tran|if|insert|values|update|set|where|commit|rollback|return)\b/g, '<span class="k">$1</span>')
-      .replace(/'[^']*'/g, m => `<span class="s">${m}</span>`).replace(/(@\w+)/g, '<span class="f">$1</span>').replace(/(-\d+|\b20003\b)/g, '<span class="n">$1</span>');
-    at(0.2, () => show('s3t')); at(0.7, () => show('s3s'));
-    tables.forEach((_, i) => at(1.2 + i * 0.35, () => show('t' + i)));
-    at(D * 0.48, () => { show('s3c'); show('code'); });
-    procs.forEach((_, i) => at(D * 0.50 + i * 0.55, () => show('pr' + i)));
+    at(0.2, () => show('s3t')); ['c1h', 'c1s'].forEach(id => at(0.8, () => show(id)));
+    at(1.4, () => show('c1l1'));
+    chips('sy-t', ['customer', 'address', 'orders', 'order_item', 'payment', 'interaction', 'loyalty_txn', 'product', 'customer_score', 'loyalty_tier_rule'], '', 0, 0.3, 1.8);
+    at(5.2, () => show('c1l2'));
+    chips('sy-p', ['sp_customer_360', 'sp_recalc_loyalty_tier', 'sp_create_order', 'sp_add_order_item', 'sp_complete_order', 'sp_score_customers'], 'c-ase', 0, 0.35, 5.6);
+    const t2 = D * 0.42;
+    at(t2, () => { show('c2h'); show('c2s'); show('c2l1'); });
+    chips('or-t', ['airport', 'flight', 'flight_inventory', 'booking', 'booking_segment', 'flight_event', 'compensation'], '', 0, 0.3, t2 + 0.5);
+    at(t2 + 3.2, () => show('c2l2'));
+    chips('or-p', ['sp_customer_trips', 'sp_book_flight', 'sp_cancel_booking', 'sp_record_delay', 'sp_cancel_flight', 'sp_process_disruptions'], 'c-ora', 0, 0.35, t2 + 3.6);
+    at(D * 0.84, () => show('key'));
+  }
+  if (scene === 's5') {
+    $('s5').classList.add('on');
+    at(0.2, () => show('s5t'));
+    const cues = [['ev-a1', 0.14], ['ev-b1', 0.26], ['ev-b2', 0.36], ['ev-w1', 0.46], ['naive', 0.54], ['ev-a2', 0.66], ['ev-w2', 0.76], ['safe', 0.86]];
+    cues.forEach(([id, f]) => at(D * f, () => show(id)));
   }
   if (scene === 'term') {
     $('term').classList.add('on');
     const body = $('termbody'), mk = (cls = '') => { const d = document.createElement('div'); d.className = 'ln ' + cls; body.appendChild(d); return d; };
-    if (kind === 'parity') {
-      $('termtitle').textContent = 'phase2: parity harness';
-      const txt = (await (await fetch('../data/parity.txt')).text()).split('\n').filter(l => l.trim() && !l.includes('NOTE:') && !l.startsWith('   customer ') );
-      const cmd = mk(); cmd.innerHTML = '<span class="pr">$</span> ./run.sh parity all<span class="cursor"></span>';
-      const per = Math.max(0.12, (D - 4.5) / txt.length);
-      txt.forEach((l, i) => at(1.2 + i * per, () => {
+    const cmdLine = (txt) => { const c = mk(); c.innerHTML = '<span class="pr">$</span> ' + txt; return c; };
+    const getText = async f => (await (await fetch('../data/' + f)).text()).split('\n');
+    if (kind === 'parity2') {
+      $('termtitle').textContent = 'phase2: parity harness (compute job vs stored procedure, identical inputs)';
+      const keep = l => l.trim() && !l.includes('NOTE:') && !l.startsWith('   customer ');
+      const syb = (await getText('parity.txt')).filter(keep), ora = (await getText('parity-oracle.txt')).filter(keep);
+      const lines = [{ t: './run.sh parity all', c: 'cmd' }]
+        .concat(syb.filter(l => l.startsWith('==') || l.startsWith('PARITY')).map(l => ({ t: l })))
+        .concat([{ t: './run.sh parity oracle', c: 'cmd' }]).concat(ora.map(l => ({ t: l })));
+      const per = Math.max(0.1, (D - 4.5) / lines.length);
+      lines.forEach((o, i) => at(0.8 + i * per, () => {
+        if (o.c === 'cmd') { cmdLine(o.t); return; }
+        const l = o.t;
         const d = mk(l.startsWith('==') ? 'hd' : l.includes('PASS') ? 'pass' : l.includes('FAIL') ? 'fail' : l.startsWith('PARITY') ? 'pass' : 'dim');
-        d.textContent = l.startsWith('PARITY') ? '\n' + l : l; cmd.querySelector('.cursor') && (cmd.querySelector('.cursor').style.display = 'none');
+        d.textContent = l.startsWith('PARITY') ? l + '\n' : l;
+      }));
+    } else if (kind === 'hubsql') {
+      $('termtitle').textContent = 'hub/run.sh: SQL across both source systems, on GridGain';
+      cmdLine('./hub/run.sh');
+      const lines = (await getText('hub-sql-display.txt')).filter(l => l.length);
+      const per = Math.max(0.12, (D - 4.5) / lines.length);
+      lines.forEach((l, i) => at(1.2 + i * per, () => {
+        const d = mk(l.startsWith('--') ? 'dim' : l.startsWith('(') ? 'dim' : l.startsWith('customer') ? 'hd' : '');
+        d.textContent = l.startsWith('-- ') ? l.slice(3) : l;
+        if (l.startsWith('--')) d.className = 'ln hd';
       }));
     } else {
       $('termtitle').textContent = 'REST API · localhost:8080';
-      const items = await (await fetch('../data/api.json')).json();
+      const items = await (await fetch('../data/' + (q.get('data') || 'api.json'))).json();
       const per = (D - 2) / items.length;
       items.forEach((it, i) => {
         const t0 = 0.4 + i * per;
@@ -193,10 +259,10 @@ async function run() {
       });
     }
   }
-  if (scene === 's9') {
-    $('s9').classList.add('on'); at(0.3, () => show('s9t'));
-    [...document.querySelectorAll('#s9 li')].forEach((li, i) => at(1.2 + i * (D * 0.2), () => li.classList.add('show')));
-    at(D * 0.82, () => document.querySelector('#s9 .foot').classList.add('show'));
+  if (scene === 's11') {
+    $('s11').classList.add('on'); at(0.3, () => show('s11t'));
+    [...document.querySelectorAll('#s11 li')].forEach((li, i) => at(1.2 + i * (D * 0.17), () => li.classList.add('show')));
+    at(D * 0.84, () => document.querySelector('#s11 .foot').classList.add('show'));
   }
 }
 run();

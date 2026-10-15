@@ -1,38 +1,50 @@
 [
  {
   "id": "s1",
-  "text": "From Sybase to GridGain. A two phase migration, demonstrated end to end."
+  "text": "From Sybase and Oracle to GridGain. Two source systems, one data hub."
  },
  {
   "id": "s2",
-  "text": "The goal is to move a Sybase application onto GridGain in two phases. In phase one, triggers capture every change in Sybase and a reader streams it into a GridGain cluster, so GridGain holds a live copy while Sybase stays the system of record. In phase two, the stored procedures are re-implemented as GridGain compute jobs, which run on the node that owns the data, behind a REST A P I."
+  "text": "Here's the idea. Two applications, with completely different data, move onto one GridGain cluster in two phases. In phase one, triggers capture every change in Sybase and in Oracle, and a reader for each one streams those changes into GridGain, so both sources keep running as the systems of record. In phase two, each system's stored procedures are rebuilt as compute jobs that run right where the data lives, behind a single A P I. And because both datasets now land in the same place, they can finally be joined."
  },
  {
   "id": "s3",
-  "text": "The demo uses a customer three sixty model in Sybase: ten tables, two hundred and fifty customers, and six stored procedures chosen to cover the hard patterns. Reads that return several result sets. Transactions that check stock and award loyalty points. And a cursor that scores every customer for churn risk."
+  "text": "Sybase holds the customer side: orders, loyalty and service history, with six stored procedures. Oracle holds the travel side: flights, seat inventory and bookings, with five. They don't share a schema, and they don't share a database. What they do share is the customer I D, and that's the key the hub joins on."
  },
  {
   "id": "s4",
-  "text": "Here is phase one, live. I am placing new orders in Sybase, about five a second, and each order writes around eleven rows. The reader applies them to GridGain within a second, and the backlog stays near zero. When the burst ends, the table sizes in GridGain settle to match Sybase, row for row."
+  "text": "Let's watch phase one, live. I'm placing orders in Sybase and booking flights in Oracle, at the same time. Each reader applies its changes to GridGain within about a second, and the backlogs stay close to zero. And when the burst ends, every table in GridGain matches its source, row for row."
  },
  {
   "id": "s5",
-  "text": "In phase two, each stored procedure became a compute job. To prove they behave identically, a harness runs every Sybase procedure and its GridGain replacement on the same inputs, and compares every value. All two hundred and fifty one customers across six result sets. Tier recalculation. Batch scoring across three nodes. The exact error numbers. And a full order that promotes a customer from silver to gold. Sixteen checks, no differences."
+  "text": "Oracle needed a different technique, and this is why. In Oracle, a reader never waits for unfinished transactions. So imagine session A starts first, but session B commits first. A reader that polls by sequence number would jump past A, and never see it. Instead, every change carries the S C N at which it was committed, and the reader takes exact windows of S C Ns. A isn't in the first window, because it hasn't committed yet, so it simply lands in the next one. Nothing is lost."
  },
  {
   "id": "s6",
-  "text": "The data lives in a three node cluster, with native persistence. With traffic flowing through the REST A P I, I will kill one node. The cluster drops to two nodes, requests keep succeeding, and nothing is lost. When the node comes back, it rejoins with its own data."
+  "text": "So how do we know the compute jobs behave like the stored procedures? A harness runs every procedure and its replacement on identical inputs, and compares every value. Sixteen checks for Sybase, thirty for Oracle: every customer, every result set, refunds, seat inventory, even the error numbers. Zero differences."
  },
  {
   "id": "s7",
-  "text": "In front of the cluster sits a REST A P I, with a generated Open A P I specification: thirty three operations, covering create, read, update and delete, plus the business operations. Placing an order runs the compute job and returns the points earned and the loyalty tier. And bad input gets a clear error that lists the allowed values."
+  "text": "Now the payoff. With both systems in one place, a plain sequel query can join them. This one adds Sybase retail spend to Oracle travel spend, to find each customer's true lifetime value. And this one finds customers with a bad service experience who are booked on a delayed flight, which neither system could answer on its own. Both run in milliseconds, on the node that owns each customer."
  },
  {
   "id": "s8",
-  "text": "The dashboard ties it together. Changes in Sybase, and requests through the A P I, both show up as live throughput, alongside the size of every table."
+  "text": "The same joins are available through the A P I. Here's a platinum customer with retail and travel combined. Here's a delayed flight, with its passengers ranked by how valuable they are, and compensation weighted by their loyalty tier. Then a booking, which runs as a single transaction, and a bad request that gets a clear error."
  },
  {
-  "id": "s9",
-  "text": "So. Sybase changes flow into GridGain continuously. The procedures run as compute jobs, with identical results. And the cluster survives losing a node."
+  "id": "s9a",
+  "text": "The data lives in a three node cluster, with native persistence. With both sources streaming and traffic hitting the A P I, I'll kill one node. The cluster drops to two, requests keep succeeding, and nothing is lost."
+ },
+ {
+  "id": "s9b",
+  "text": "And when the node comes back, it rejoins with its own data."
+ },
+ {
+  "id": "s10",
+  "text": "The dashboard ties it together: both sources, the A P I, and every table, live."
+ },
+ {
+  "id": "s11",
+  "text": "So: two source systems, streaming into one hub. Eleven stored procedures, running as compute jobs with identical results. Cross source queries that neither system could answer. And a cluster that survives losing a node."
  }
 ]

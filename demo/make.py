@@ -4,8 +4,8 @@
   python3 make.py            build everything
   python3 make.py s4 s6      only these scenes (then re-run the final assembly)
 
-Needs: the whole stack running (Sybase on llama, GridGain x3, gg-api, gg-cdc), headless Chrome on :9333, the scene server on :8099
-(see README.md in this folder). Live scenes perform REAL actions while recording: place orders in Sybase, kill and restart a GridGain node.
+Needs: the whole stack running (Sybase on llama, Oracle, GridGain x3, gg-api, both CDC readers, Docker for Piper), headless Chrome on :9333, the scene server on :8099
+(see README.md in this folder). Live scenes perform REAL actions while recording: change data in both sources, kill and restart a GridGain node.
 """
 import json, os, subprocess, sys, threading, time, urllib.request
 
@@ -16,9 +16,6 @@ SCENES_URL = "http://127.0.0.1:8099/scenes/index.html"
 DASH_URL = "http://localhost:8080/"
 INJECT = open("inject.js").read()
 NARR = {n["id"]: n["text"] for n in json.load(open("data/narration.json"))}
-NARR["s6a"] = ("The data lives in a three node cluster, with native persistence. With traffic flowing through the REST A P I, "
-               "I will kill one node. The cluster drops to two nodes, requests keep succeeding, and nothing is lost.")
-NARR["s6b"] = "When the node comes back, it rejoins with its own data."
 LEAD = 0.6   # seconds of picture before the voice starts
 
 
@@ -27,13 +24,19 @@ def sh(cmd, **kw):
 
 
 def audio_len(name):
-    return float(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", f"audio/{name}.aiff"],
+    return float(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", f"audio/{name}.wav"],
                                 capture_output=True, text=True).stdout)
 
 
 def ensure_audio(name):
-    if not os.path.exists(f"audio/{name}.aiff"):
-        subprocess.run(["say", "-v", "Daniel", "-r", "170", "-o", f"audio/{name}.aiff", NARR[name]], check=True)
+    """Neural voice: Piper (UK female 'Alba') running in Docker. Model and engine live in tts/ (see README)."""
+    if not os.path.exists(f"audio/{name}.wav"):
+        os.makedirs("audio", exist_ok=True)
+        subprocess.run(["docker", "run", "--rm", "-i", "--entrypoint", "/tts/linux/piper/piper", "-v", f"{ROOT}/tts:/tts",
+                        "eclipse-temurin:17-jre", "--model", "/tts/alba.onnx", "--config", "/tts/alba.onnx.json",
+                        "--length_scale", "1.05", "--sentence_silence", "0.4", "--output_file", f"/tts/out/{name}.wav"],
+                       input=NARR[name], text=True, check=True)
+        os.replace(f"tts/out/{name}.wav", f"audio/{name}.wav")
     return audio_len(name)
 
 
@@ -76,7 +79,7 @@ def build_clip(name, dur, voices):
     mf = f"frames/{name}/manifest.txt"
     inputs, filt, mix = ["-f", "concat", "-safe", "0", "-i", mf], [], []
     for i, (a, start) in enumerate(voices, start=1):
-        inputs += ["-i", f"audio/{a}.aiff"]
+        inputs += ["-i", f"audio/{a}.wav"]
         ms = int(start * 1000)
         filt.append(f"[{i}:a]adelay={ms}|{ms}[a{i}]")
         mix.append(f"[a{i}]")
@@ -108,30 +111,40 @@ def s2(): html_scene("s2", ensure_audio("s2") + 2.4)
 def s3(): html_scene("s3", ensure_audio("s3") + 2.6)
 
 
-def s4():   # phase 1 live: place orders in Sybase while recording the dashboard
+def loads(syb_orders=12, syb_secs=5, ora_n=12, ora_secs=8):
+    def g(t0):
+        a = threading.Thread(target=lambda: sh(f"cd '{PROJ}/sybase' && ./gen-load.sh --orders {syb_orders} {syb_secs}"))
+        b = threading.Thread(target=lambda: sh(f"cd '{PROJ}/oracle' && ./gen-load.sh {ora_n} {ora_secs}"))
+        a.start(); b.start(); a.join(); b.join()
+    return g
+
+
+def s4():   # phase 1 live: both sources change while recording the dashboard
     dur = ensure_audio("s4") + 7.0
-    gen = lambda t0: sh(f"cd '{PROJ}/sybase' && ./gen-load.sh --orders 12 5")
     record("s4", DASH_URL, dur,
-           events=[(0.2, live_setup("charts", 1.1, "Phase 1 · new orders are placed in Sybase")),
-                   (17.0, "__view('tables', 1.3); __cap('Row counts converge once the burst ends'); 'ok'")],
-           actions=[(0.5, gen)])
+           events=[(0.2, live_setup("charts", 1.0, "Phase 1 · changes in Sybase and Oracle")),
+                   (dur - 8.0, "__view('tables', 1.0); __cap('Row counts converge once the burst ends'); 'ok'")],
+           actions=[(0.5, loads())])
     build_clip("s4", dur, [("s4", LEAD)])
 
 
-def s5(): html_scene("s5", ensure_audio("s5") + 2.6, "term&kind=parity")
+def s5(): html_scene("s5", ensure_audio("s5") + 2.6)
+def s6(): html_scene("s6", ensure_audio("s6") + 2.6, "term&kind=parity2")
+def s7(): html_scene("s7", ensure_audio("s7") + 3.0, "term&kind=hubsql")
+def s8(): html_scene("s8", ensure_audio("s8") + 6.0, "term&kind=api&data=api2.json")
 
 
-def s6():   # cluster resilience: kill node 3 under REST traffic, hold the 2-node state, restart it, note when it rejoined
-    a, b = ensure_audio("s6a"), ensure_audio("s6b")
+def s9():   # cluster resilience: kill node 3 under REST traffic and both loads, hold 2-node state, restart, note rejoin
+    a, b = ensure_audio("s9a"), ensure_audio("s9b")
     dur = 72.0
     marks = {}
     kill = lambda t0: (sh("docker kill gridgain3"), marks.update(kill=time.time() - t0))
 
     def restart(t0):
-        while nodes_online() != 2 and time.time() - t0 < 45:     # wait until the dashboard actually shows 2 nodes
+        while nodes_online() != 2 and time.time() - t0 < 45:
             time.sleep(0.5)
         marks["two"] = time.time() - t0
-        time.sleep(9)                                              # hold the degraded state so the viewer can see it
+        time.sleep(9)
         sh("docker start gridgain3")
         marks["start"] = time.time() - t0
         while time.time() - t0 < dur - 2:
@@ -140,30 +153,27 @@ def s6():   # cluster resilience: kill node 3 under REST traffic, hold the 2-nod
                 return
             time.sleep(0.5)
 
-    record("s6", DASH_URL, dur,
-           events=[(0.2, live_setup("charts", 1.1, "3 of 3 GridGain nodes online", rate=20, extra="__nodes();")),
+    record("s9", DASH_URL, dur,
+           events=[(0.2, live_setup("charts", 1.0, "3 of 3 GridGain nodes online", rate=20, extra="__nodes();")),
                    (9.0, "window.__pend = 'killing node 3 ...'; 'ok'")],
-           actions=[(9.0, kill), (9.5, restart)])
+           actions=[(0.5, loads(12, 40, 12, 40)), (9.0, kill), (9.5, restart)])
     print("   marks:", {k: round(v, 1) for k, v in marks.items()})
     rejoin = marks.get("rejoin", 50.0)
-    final = min(dur, max(rejoin + 9.0, LEAD + a + 1.0 + b + 3.0))   # end shortly after the node is back
-    build_clip("s6", final, [("s6a", LEAD), ("s6b", min(max(rejoin + 1.0, LEAD + a + 1.0), final - b - 1.5))])
+    final = min(dur, max(rejoin + 9.0, LEAD + a + 1.0 + b + 3.0))
+    build_clip("s9", final, [("s9a", LEAD), ("s9b", min(max(rejoin + 1.0, LEAD + a + 1.0), final - b - 1.5))])
 
 
-def s7(): html_scene("s7", ensure_audio("s7") + 6.0, "term&kind=api")
+def s10():   # finale: both loads plus REST traffic on the dashboard
+    dur = ensure_audio("s10") + 8.0
+    record("s10", DASH_URL, dur, events=[(0.2, live_setup("charts", 1.0, "Live: Sybase + Oracle changes and REST requests", rate=50))],
+           actions=[(0.5, loads(12, 8, 12, 10))])
+    build_clip("s10", dur, [("s10", LEAD)])
 
 
-def s8():   # both loads at once on the dashboard
-    dur = ensure_audio("s8") + 6.0
-    gen = lambda t0: sh(f"cd '{PROJ}/sybase' && ./gen-load.sh 12 100")
-    record("s8", DASH_URL, dur, events=[(0.2, live_setup("charts", 1.1, "Live: Sybase changes + REST requests", rate=50))], actions=[(0.5, gen)])
-    build_clip("s8", dur, [("s8", LEAD)])
+def s11(): html_scene("s11", ensure_audio("s11") + 2.4)
 
 
-def s9(): html_scene("s9", ensure_audio("s9") + 2.4)
-
-
-ORDER = ["s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8", "s9"]
+ORDER = ["s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8", "s9", "s10", "s11"]
 
 
 def assemble():
