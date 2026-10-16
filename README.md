@@ -349,6 +349,19 @@ data is served by `GET /api/v1/dashboard/summary` and `/series?since=`. CDC rate
 timestamps as the time base (using the sampler's clock aliased 65/130 events/s for a steady 100/s). The latency graph
 compares a Sybase timestamp with the reader's clock, so it is approximate if the two clocks differ.
 
+## Unit tests
+
+`tests/run-all.sh` runs everything (about a minute); `tests/run-all.sh api` runs one module. No test needs the cluster or either database.
+
+| Suite | Tests | What it covers |
+|---|---|---|
+| `tests/python` | 36 | the four generators (`generate_seed.py`, `generate_cdc.py` for both sources): row counts, determinism, primary and foreign keys, money totals, seat and inventory consistency, one trigger per replicated table with the right keys, and that `hub/queries.sql` only uses tables and columns that exist in the GridGain schemas |
+| `cdc/src/test` | 36 | table specs and generated SQL, the Sybase and Oracle table definitions checked against the GridGain DDL, key encoding, value normalisation used by `verify`, statement binding, and the stats publisher (`Metrics`) against a mocked connection |
+| `phase2/src/test` | 109 | the shared rules (seat numbers, miles, refund share, churn score and band, compensation share, service priority), map/reduce of the tasks, the CLI argument parsing and the parity comparison rules |
+| `api/src/test` | 110 | every controller through MockMvc (validation, filters, error mapping to RFC 7807), the DTO constraints, `ComputeService` error mapping and argument building, the dashboard rate calculations, request metrics and the JDBC column reader |
+
+Not covered by unit tests: the SQL inside the repositories and the compute jobs' queries. Those need a real cluster and are checked by the parity harness (`phase2/run.sh parity all` and `parity oracle`), the API smoke test (`api/smoke-test.sh`) and `cdc/run.sh verify`.
+
 ## Environment
 
 Oracle runs in the `oracle` container on this Mac (see "Second source" above); GridGain, the API and both CDC readers are Docker containers on the

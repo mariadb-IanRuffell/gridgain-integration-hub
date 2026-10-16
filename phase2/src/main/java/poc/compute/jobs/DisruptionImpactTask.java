@@ -76,6 +76,20 @@ public class DisruptionImpactTask extends ComputeTaskAdapter<Integer, Map<String
         return out;
     }
 
+    /** Share of the fare owed: 100% cancelled; delays 720+ min 75%, 360+ min 50%, 180+ min 25%, shorter none. */
+    static BigDecimal share(boolean cancelled, int delayMinutes) {
+        return cancelled ? BigDecimal.ONE : delayMinutes >= 720 ? new BigDecimal("0.75")
+            : delayMinutes >= 360 ? new BigDecimal("0.5") : delayMinutes >= 180 ? new BigDecimal("0.25") : BigDecimal.ZERO;
+    }
+
+    /** Service priority: tier (hundreds) + cabin (tens) + retail spend band (units, 0-9 per 10,000 spent). */
+    static int priority(String tier, String cabin, BigDecimal retailSpend) {
+        int tierWeight = "PLATINUM".equals(tier) ? 4 : "GOLD".equals(tier) ? 3 : "SILVER".equals(tier) ? 2 : 1;
+        int cabinWeight = "FIRST".equals(cabin) ? 3 : "BUSINESS".equals(cabin) ? 2 : 1;
+        int spendBand = Math.min(9, retailSpend.divide(BigDecimal.valueOf(10_000), 0, RoundingMode.DOWN).intValue());
+        return tierWeight * 100 + cabinWeight * 10 + spendBand;
+    }
+
     static class Job extends ComputeJobAdapter {
         @IgniteInstanceResource
         private transient Ignite ignite;
@@ -107,18 +121,14 @@ public class DisruptionImpactTask extends ComputeTaskAdapter<Integer, Map<String
 
                 String tier = (String) r.get("loyalty_tier"), cabin = (String) r.get("cabin");
                 int delay = ((Number) r.get("delay_minutes")).intValue();
-                BigDecimal pct = "CANCELLED".equals(r.get("flight_status")) ? BigDecimal.ONE : delay >= 720 ? new BigDecimal("0.75")
-                    : delay >= 360 ? new BigDecimal("0.5") : delay >= 180 ? new BigDecimal("0.25") : BigDecimal.ZERO;
+                BigDecimal pct = share("CANCELLED".equals(r.get("flight_status")), delay);
                 BigDecimal base = ((BigDecimal) r.get("fare")).multiply(pct).setScale(2, RoundingMode.HALF_UP);
                 BigDecimal suggested = base.multiply(mult.getOrDefault(tier, BigDecimal.ONE)).setScale(2, RoundingMode.HALF_UP);
-                int tierWeight = "PLATINUM".equals(tier) ? 4 : "GOLD".equals(tier) ? 3 : "SILVER".equals(tier) ? 2 : 1;
-                int cabinWeight = "FIRST".equals(cabin) ? 3 : "BUSINESS".equals(cabin) ? 2 : 1;
-                int spendBand = Math.min(9, ((BigDecimal) r.get("retail_spend")).divide(BigDecimal.valueOf(10_000), 0, RoundingMode.DOWN).intValue());
 
                 LinkedHashMap<String, Object> row = new LinkedHashMap<>(r);
                 row.put("base_compensation", base);
                 row.put("suggested_compensation", suggested);
-                row.put("priority", tierWeight * 100 + cabinWeight * 10 + spendBand);
+                row.put("priority", priority(tier, cabin, (BigDecimal) r.get("retail_spend")));
                 out.add(row);
             }
             return out;

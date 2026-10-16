@@ -231,7 +231,7 @@ final class SybaseCdc implements CdcSource {
         return m;
     }
 
-    private static String norm(Object o) {
+    static String norm(Object o) {
         if (o == null) return "~";
         if (o instanceof BigDecimal b) return b.signum() == 0 ? "0" : b.stripTrailingZeros().toPlainString();
         if (o instanceof Timestamp ts) return Long.toString(ts.getTime());
@@ -242,11 +242,11 @@ final class SybaseCdc implements CdcSource {
 
     // ------------------------------------------------------------------ helpers
 
-    private static void bind(PreparedStatement ps, ResultSet rs, int n) throws SQLException {
+    static void bind(PreparedStatement ps, ResultSet rs, int n) throws SQLException {
         for (int i = 1; i <= n; i++) ps.setObject(i, rs.getObject(i));
     }
 
-    private static void setPk(PreparedStatement ps, int idx, TableSpec t, String pk) throws SQLException {
+    static void setPk(PreparedStatement ps, int idx, TableSpec t, String pk) throws SQLException {
         if (t.pkIsString) ps.setString(idx, pk); else ps.setInt(idx, Integer.parseInt(pk));
     }
 
@@ -286,13 +286,13 @@ final class SybaseCdc implements CdcSource {
         return queryLong(ase, sql);
     }
 
-    private static String readResource(String path) throws java.io.IOException {
+    static String readResource(String path) throws java.io.IOException {
         try (var in = SybaseCdc.class.getResourceAsStream(path)) {
             return new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
         }
     }
 
-    private static String stripComments(String sql) {
+    static String stripComments(String sql) {
         return java.util.Arrays.stream(sql.split("\n")).filter(l -> !l.trim().startsWith("--"))
             .collect(java.util.stream.Collectors.joining("\n"));
     }

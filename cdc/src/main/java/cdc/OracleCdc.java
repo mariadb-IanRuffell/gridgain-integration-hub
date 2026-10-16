@@ -225,12 +225,12 @@ final class OracleCdc implements CdcSource {
         }
     }
 
-    private static String pkPredicate(Tbl t, int n) {
+    static String pkPredicate(Tbl t, int n) {
         if (t.pk.length == 1) return "t." + t.pk[0] + " in (" + "?, ".repeat(n - 1) + "?)";
         return "(t." + t.pk[0] + ", t." + t.pk[1] + ") in (" + "(?, ?), ".repeat(n - 1) + "(?, ?))";
     }
 
-    private static String keyOf(ResultSet rs, Tbl t) throws SQLException {
+    static String keyOf(ResultSet rs, Tbl t) throws SQLException {
         StringBuilder b = new StringBuilder();
         for (int k = 0; k < t.pk.length; k++) {
             int idx = t.cols.indexOf(t.pk[k]) + 1;
@@ -291,7 +291,7 @@ final class OracleCdc implements CdcSource {
         return oracleSide && t.types.get(i - 1) == 'T' ? rs.getTimestamp(i) : rs.getObject(i);
     }
 
-    private static String norm(Object o) {
+    static String norm(Object o) {
         if (o == null) return "~";
         if (o instanceof BigDecimal b) return b.signum() == 0 ? "0" : b.stripTrailingZeros().toPlainString();
         if (o instanceof Timestamp ts) return Long.toString(ts.getTime());
@@ -302,7 +302,7 @@ final class OracleCdc implements CdcSource {
 
     // ------------------------------------------------------------------ helpers
 
-    private static void bind(PreparedStatement ps, ResultSet rs, Tbl t) throws SQLException {
+    static void bind(PreparedStatement ps, ResultSet rs, Tbl t) throws SQLException {
         for (int i = 1; i <= t.cols.size(); i++) {
             switch (t.types.get(i - 1)) {
                 case 'I' -> { int v = rs.getInt(i); ps.setObject(i, rs.wasNull() ? null : (Object) v); }
@@ -313,7 +313,7 @@ final class OracleCdc implements CdcSource {
         }
     }
 
-    private static void setTyped(PreparedStatement ps, int idx, char type, String v) throws SQLException {
+    static void setTyped(PreparedStatement ps, int idx, char type, String v) throws SQLException {
         if (type == 'I') ps.setLong(idx, Long.parseLong(v)); else ps.setString(idx, v);
     }
 
@@ -345,13 +345,13 @@ final class OracleCdc implements CdcSource {
         try (Statement s = c.createStatement(); ResultSet rs = s.executeQuery(sql)) { rs.next(); return rs.getLong(1); }
     }
 
-    private static String readResource(String path) throws java.io.IOException {
+    static String readResource(String path) throws java.io.IOException {
         try (var in = OracleCdc.class.getResourceAsStream(path)) {
             return new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
         }
     }
 
-    private static String stripComments(String sql) {
+    static String stripComments(String sql) {
         return java.util.Arrays.stream(sql.split("\n")).filter(l -> !l.trim().startsWith("--"))
             .collect(java.util.stream.Collectors.joining("\n"));
     }

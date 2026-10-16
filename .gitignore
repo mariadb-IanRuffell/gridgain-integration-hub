@@ -17,3 +17,4 @@ demo/audio/
 demo/frames/
 demo/data/ev-*.json
 demo/tts/
+__pycache__/

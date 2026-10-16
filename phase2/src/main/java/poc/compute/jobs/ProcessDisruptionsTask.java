@@ -59,6 +59,16 @@ public class ProcessDisruptionsTask extends ComputeTaskAdapter<Map<String, Objec
         return out;
     }
 
+    /** Compensation reason code: cancelled flight, delay of 720+ / 360+ minutes, otherwise a short delay. */
+    static String reason(boolean cancelled, int delayMinutes) {
+        return cancelled ? "CANCELLED" : delayMinutes >= 720 ? "DELAY_720" : delayMinutes >= 360 ? "DELAY_360" : "DELAY_SHORT";
+    }
+
+    /** Share of the fare compensated: 100% cancelled, 75% / 50% for long delays, 25% otherwise. */
+    static BigDecimal share(boolean cancelled, int delayMinutes) {
+        return cancelled ? BigDecimal.ONE : delayMinutes >= 720 ? new BigDecimal("0.75") : delayMinutes >= 360 ? new BigDecimal("0.5") : new BigDecimal("0.25");
+    }
+
     static class Job extends ComputeJobAdapter {
         @IgniteInstanceResource
         private transient Ignite ignite;
@@ -86,13 +96,9 @@ public class ProcessDisruptionsTask extends ComputeTaskAdapter<Map<String, Objec
                 if (!ignite.affinity("booking").isPrimary(me, cid)) continue;     // the owner processes it, not a backup
 
                 int delay = ((Number) s.get("delay_minutes")).intValue();
-                BigDecimal pct;
-                String reason;
-                if ("CANCELLED".equals(s.get("fstatus"))) { pct = BigDecimal.ONE; reason = "CANCELLED"; }
-                else if (delay >= 720) { pct = new BigDecimal("0.75"); reason = "DELAY_720"; }
-                else if (delay >= 360) { pct = new BigDecimal("0.5"); reason = "DELAY_360"; }
-                else { pct = new BigDecimal("0.25"); reason = "DELAY_SHORT"; }
-                BigDecimal amount = ((BigDecimal) s.get("fare")).multiply(pct).setScale(2, RoundingMode.HALF_UP);
+                boolean cancelled = "CANCELLED".equals(s.get("fstatus"));
+                String reason = reason(cancelled, delay);
+                BigDecimal amount = ((BigDecimal) s.get("fare")).multiply(share(cancelled, delay)).setScale(2, RoundingMode.HALF_UP);
 
                 Sql.exec(ignite, "MERGE INTO compensation (segment_id, customer_id, amount, reason, created_at) VALUES (?, ?, ?, ?, ?)",
                     s.get("segment_id"), cid, amount, reason, asOf);

@@ -59,6 +59,19 @@ public class ScoreCustomersTask extends ComputeTaskAdapter<Long, List<Object>> {
         return out;
     }
 
+    /** Churn score 0..100: recency (0-60) + 12-month order count (0-30) + open cases (0-10) + negative sentiment (10). */
+    static int churnScore(long recencyDays, long orders12m, long openCases, double avgSentiment) {
+        int score = (recencyDays <= 90 ? 0 : recencyDays <= 180 ? 20 : recencyDays <= 365 ? 40 : 60)
+            + (orders12m >= 4 ? 0 : orders12m >= 2 ? 10 : orders12m == 1 ? 20 : 30)
+            + (int) Math.min(openCases * 5, 10)
+            + (avgSentiment < 0 ? 10 : 0);
+        return Math.min(score, 100);
+    }
+
+    static String riskBand(int score) {
+        return score < 30 ? "LOW" : score < 60 ? "MEDIUM" : "HIGH";
+    }
+
     static class Job extends ComputeJobAdapter {
         @IgniteInstanceResource
         private transient Ignite ignite;
@@ -109,12 +122,8 @@ public class ScoreCustomersTask extends ComputeTaskAdapter<Long, List<Object>> {
                 long open = openCases.getOrDefault(cid, 0L);
                 double sent = avgSentiment.getOrDefault(cid, 0.0);
 
-                int score = (recency <= 90 ? 0 : recency <= 180 ? 20 : recency <= 365 ? 40 : 60)
-                    + (o12 >= 4 ? 0 : o12 >= 2 ? 10 : o12 == 1 ? 20 : 30)
-                    + (int) Math.min(open * 5, 10)
-                    + (sent < 0 ? 10 : 0);
-                score = Math.min(score, 100);
-                String band = score < 30 ? "LOW" : score < 60 ? "MEDIUM" : "HIGH";
+                int score = churnScore(recency, o12, open, sent);
+                String band = riskBand(score);
 
                 Sql.exec(ignite, "MERGE INTO customer_score (customer_id, churn_score, risk_band, scored_at) "
                     + "VALUES (?, ?, ?, ?)", cid, score, band, asOf);
