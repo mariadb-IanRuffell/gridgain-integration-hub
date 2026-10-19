@@ -220,4 +220,27 @@ class ComputeServiceTest {
             Thread.interrupted();   // do not leak the flag into other tests
         }
     }
+
+    @Test
+    void generateOffersBuildsTheArgumentAndMapsTheSummary() throws Exception {
+        jobReturns("RecommendOffersTask", ok("customers", 240L, "customers_with_offers", 240L, "offers", 720L, "avg_discount_pct", 5.03, "avg_score", 1.1273,
+            "by_category", List.of(Map.of("category", "FLIGHT", "offers", 360L), Map.of("category", "HOTEL", "offers", 34L))));
+        OfferRun r = service.generateOffers(3, null);
+        assertEquals(720L, r.offers());
+        assertEquals(240L, r.customersWithOffers());
+        assertEquals(5.03, r.avgDiscountPct());
+        assertEquals(List.of(new CategoryCount("FLIGHT", 360L), new CategoryCount("HOTEL", 34L)), r.byCategory());
+        @SuppressWarnings("unchecked") ArgumentCaptor<Map<String, Object>> arg = ArgumentCaptor.forClass(Map.class);
+        verify(compute).execute(eq("poc.compute.jobs.RecommendOffersTask"), arg.capture());
+        assertEquals(Map.of("top_n", 3), arg.getValue());
+        service.generateOffers(5, 72);
+        verify(compute, times(2)).execute(eq("poc.compute.jobs.RecommendOffersTask"), arg.capture());
+        assertEquals(Map.of("top_n", 5, "customer_id", 72), arg.getValue());
+    }
+
+    @Test
+    void generateOffersForAnUnknownCustomerIsNotFound() throws Exception {
+        jobReturns("RecommendOffersTask", fail(20002, "Customer not found or not active"));
+        assertEquals("Customer 999 not found", assertThrows(NotFound.class, () -> service.generateOffers(3, 999)).getMessage());
+    }
 }

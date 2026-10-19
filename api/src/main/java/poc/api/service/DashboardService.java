@@ -168,9 +168,11 @@ public class DashboardService {
     }
 
     private Summary buildSummary(long now, RequestMetrics.Snapshot api) {
-        long totalGg = tables.stream().mapToLong(TableSize::gridgainRows).sum();
-        Long totalSrc = !tables.isEmpty() && tables.stream().allMatch(t -> t.sourceRows() != null)
-            ? tables.stream().mapToLong(TableSize::sourceRows).sum() : null;
+        // totals cover the replicated tables only: GridGain-native tables (offers) have no source system to compare with
+        List<TableSize> replicated = tables.stream().filter(t -> !DashboardRepository.NATIVE.equals(t.source())).toList();
+        long totalGg = replicated.stream().mapToLong(TableSize::gridgainRows).sum();
+        Long totalSrc = !replicated.isEmpty() && replicated.stream().allMatch(t -> t.sourceRows() != null)
+            ? replicated.stream().mapToLong(TableSize::sourceRows).sum() : null;
         List<CdcStatus> cdc = new ArrayList<>();
         for (Track t : List.of(sybase, oracle)) {
             CdcStatus s = t.status(now);

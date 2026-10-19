@@ -47,8 +47,12 @@
   .barbg { background: var(--bar); height: 10px; border-radius: 5px; }
   .barfg { background: var(--c1); height: 10px; border-radius: 5px; min-width: 2px; }
   .barfg.oracle { background: var(--c4); }
+  .barfg.gridgain { background: var(--c2); }
   td.src { text-align: left; font-size: 12.5px; color: var(--muted); }
-  td.src-oracle { color: var(--c4); } td.src-sybase { color: var(--c1); }
+  td.src-oracle { color: var(--c4); } td.src-sybase { color: var(--c1); } td.src-gridgain { color: var(--c2); }
+  td.txt, th.txt { text-align: left; }
+  .offerhead { display: flex; flex-wrap: wrap; gap: 8px 24px; align-items: baseline; margin-bottom: 8px; }
+  .offerhead .sub b { color: var(--ink); font-weight: 600; }
   .delta-0 { color: var(--ok); } .delta-pos { color: var(--warn); } .delta-neg { color: var(--bad); }
   .tools { display: flex; flex-wrap: wrap; gap: 10px 20px; align-items: center; }
   select, button { font: inherit; padding: 4px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--ink); }
@@ -88,6 +92,20 @@
     <table>
       <thead><tr><th>Table</th><th>Source</th><th>GridGain rows</th><th>Source rows</th><th>Δ</th><th class="bar" style="text-align:left">Share of GridGain rows</th></tr></thead>
       <tbody id="tbl"></tbody>
+    </table>
+  </section>
+
+  <section class="card" id="offers">
+    <div class="offerhead">
+      <h2>Offers from buying behaviour</h2>
+      <span class="sub" id="offer-note">–</span>
+      <span style="margin-left:auto;display:flex;gap:10px;align-items:center"><span class="sub" id="offer-run"></span><button id="offer-go">Generate offers</button></span>
+    </div>
+    <div class="sub" style="margin-bottom:6px">A recommender runs inside the cluster, on the node that owns each customer: recency-weighted category affinity, what similar-tier customers buy,
+      repurchase of consumables and the customer's next flight (Oracle). Strongest first offers:</div>
+    <table>
+      <thead><tr><th class="txt">Customer</th><th class="txt">Offer</th><th class="txt">Category</th><th>Score</th><th>Discount</th><th>List</th><th>Offer</th><th class="txt">Why</th></tr></thead>
+      <tbody id="offer-tbl"></tbody>
     </table>
   </section>
 
@@ -241,13 +259,34 @@ async function pollSummary() {
   const max = Math.max(1, ...s.tables.map(t => t.gridgainRows));
   $("tbl").innerHTML = s.tables.map(t => {
     const d = t.difference, cls = d == null ? "" : d === 0 ? "delta-0" : d > 0 ? "delta-pos" : "delta-neg";
-    return `<tr><td>${t.name}</td><td class="src src-${t.source}">${t.source === "oracle" ? "Oracle" : "Sybase"}</td><td>${fmtInt(t.gridgainRows)}</td><td>${fmtInt(t.sourceRows)}</td>` +
+    return `<tr><td>${t.name}</td><td class="src src-${t.source}">${{oracle: "Oracle", sybase: "Sybase", gridgain: "GridGain"}[t.source] || t.source}</td><td>${fmtInt(t.gridgainRows)}</td><td>${fmtInt(t.sourceRows)}</td>` +
       `<td class="${cls}">${d == null ? "–" : d === 0 ? "in sync" : (d > 0 ? "+" : "") + fmtInt(d)}</td>` +
       `<td class="bar"><div class="barbg"><div class="barfg ${t.source}" style="width:${t.gridgainRows / max * 100}%"></div></div></td></tr>`;
   }).join("");
   $("tbl-note").textContent = "Row counts in GridGain, compared with the counts last taken in each source system by its CDC reader" +
     (s.sourceCountsAt ? " (" + ago(s.sourceCountsAt) + ")" : "") + ". A positive Δ means GridGain has rows the source does not (for example rows created through the REST API), or the source count is a few seconds behind while changes are streaming in.";
 }
+
+/* ---------------- offers ---------------- */
+const esc = v => String(v).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+async function pollOffers() {
+  let o;
+  try { o = await (await fetch("/api/v1/dashboard/offers")).json(); } catch (e) { return; }
+  $("offer-note").innerHTML = o.offers ? `<b>${fmtInt(o.offers)}</b> offers for <b>${fmtInt(o.customers)}</b> customers · average discount <b>${o.avgDiscountPct.toFixed(1)}%</b>` +
+    (o.byCategory.length ? " · " + o.byCategory.map(c => `${c.category.toLowerCase()} ${fmtInt(c.offers)}`).join(", ") : "") + (o.lastGenerated ? " · generated " + ago(o.lastGenerated) : "") : "no offers yet";
+  $("offer-tbl").innerHTML = (o.top || []).map(x => `<tr><td class="txt">${x.customerId}</td><td class="txt">${esc(x.productName)}</td><td class="txt">${esc(x.category.toLowerCase())}</td>` +
+    `<td>${x.score.toFixed(2)}</td><td>${x.discountPct}%</td><td>${fmtInt(x.listPrice)}</td><td>${fmtInt(x.offerPrice)}</td><td class="txt">${esc(x.reason)}</td></tr>`).join("");
+}
+$("offer-go").addEventListener("click", async () => {
+  const b = $("offer-go"); b.disabled = true; $("offer-run").textContent = "running…";
+  const t0 = Date.now();
+  try {
+    const r = await fetch("/api/v1/offers/generate?topN=3", { method: "POST" });
+    const j = await r.json();
+    $("offer-run").textContent = r.ok ? `${fmtInt(j.offers)} offers for ${fmtInt(j.customersWithOffers)} customers in ${((Date.now() - t0) / 1000).toFixed(1)} s` : (j.detail || "failed");
+  } catch (e) { $("offer-run").textContent = "failed"; }
+  b.disabled = false; pollOffers();
+});
 
 /* ---------------- REST read-traffic generator ---------------- */
 let sent = 0, failed = 0, inflight = 0, acc = 0;
@@ -270,9 +309,10 @@ $("rate").addEventListener("change", () => { sent = failed = 0; acc = 0; $("gen-
 $("win").addEventListener("change", () => charts.forEach(c => c.draw()));
 addEventListener("resize", () => charts.forEach(c => c.draw()));
 
-pollSeries(); pollSummary();
+pollSeries(); pollSummary(); pollOffers();
 setInterval(pollSeries, 2000);
 setInterval(pollSummary, 3000);
+setInterval(pollOffers, 5000);
 </script>
 </body>
 </html>

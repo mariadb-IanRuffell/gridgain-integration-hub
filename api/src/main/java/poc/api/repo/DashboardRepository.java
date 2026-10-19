@@ -14,6 +14,9 @@ public class DashboardRepository {
     /** A replicated table and the source system it comes from. */
     public record TableRef(String name, String source) {}
 
+    /** Source label of tables that exist only in GridGain (written by compute jobs): no source system to compare with. */
+    public static final String NATIVE = "gridgain";
+
     public static final List<TableRef> TABLES = List.of(
         new TableRef("customer", "sybase"), new TableRef("address", "sybase"), new TableRef("product", "sybase"),
         new TableRef("orders", "sybase"), new TableRef("order_item", "sybase"), new TableRef("payment", "sybase"),
@@ -21,7 +24,8 @@ public class DashboardRepository {
         new TableRef("loyalty_tier_rule", "sybase"),
         new TableRef("airport", "oracle"), new TableRef("flight", "oracle"), new TableRef("flight_inventory", "oracle"),
         new TableRef("booking", "oracle"), new TableRef("booking_segment", "oracle"), new TableRef("flight_event", "oracle"),
-        new TableRef("compensation", "oracle"));
+        new TableRef("compensation", "oracle"),
+        new TableRef("customer_offer", NATIVE));
 
     /** Consumer name each CDC reader publishes under in cdc_status. Sybase's is historical ("gridgain"). */
     public static final String SYBASE_CONSUMER = "gridgain", ORACLE_CONSUMER = "oracle";
@@ -40,7 +44,14 @@ public class DashboardRepository {
 
     public Map<String, Long> gridGainRows() {
         Map<String, Long> out = new LinkedHashMap<>();
-        for (TableRef t : TABLES) out.put(t.name(), jdbc.sql("SELECT COUNT(*) FROM " + t.name()).query(Long.class).single());
+        for (TableRef t : TABLES) {
+            try {
+                out.put(t.name(), jdbc.sql("SELECT COUNT(*) FROM " + t.name()).query(Long.class).single());
+            } catch (org.springframework.dao.DataAccessException e) {
+                if (!NATIVE.equals(t.source())) throw e;
+                out.put(t.name(), 0L);      // a GridGain-only table that has not been created yet
+            }
+        }
         return out;
     }
 

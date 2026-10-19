@@ -36,8 +36,15 @@ public final class Main {
                     print(compute.execute(PKG + "ProcessDisruptionsTask", m));
                     break;
                 }
+                case "offers": {   // offers [customer_id|all] [top_n]
+                    Map<String, Object> m = new HashMap<>();
+                    if (a.length > 1 && !a[1].equals("all")) m.put("customer_id", Integer.parseInt(a[1]));
+                    if (a.length > 2) m.put("top_n", Integer.parseInt(a[2]));
+                    print(compute.execute(PKG + "RecommendOffersTask", m));
+                    break;
+                }
                 case "parity":
-                    System.exit((a.length > 1 && a[1].equals("oracle") ? new ParityOracle(client).run() : new Parity(client).run(a)) ? 0 : 1);
+                    System.exit((a.length > 1 && a[1].equals("oracle") ? new ParityOracle(client).run() : new ParitySybase(client).run(a)) ? 0 : 1);
                     break;
                 default: usage();
             }
@@ -131,7 +138,7 @@ public final class Main {
             + "       run.sh order <customer_id> <channel> <method> <product:qty,...>\n"
             + "       run.sh trips <customer_id> | hub <customer_id> | impact <flight_id> | cancel-booking <booking_id>\n"
             + "       run.sh book <customer_id> <flight_id> <cabin> <passenger> [channel] | delay <flight_id> <minutes> [reason]\n"
-            + "       run.sh cancel-flight <flight_id> [reason] | disruptions [min_delay]\n"
+            + "       run.sh cancel-flight <flight_id> [reason] | disruptions [min_delay] | offers [customer_id|all] [top_n]\n"
             + "       run.sh parity <360|recalc|score|order|errors|all|oracle>");
         System.exit(2);
     }

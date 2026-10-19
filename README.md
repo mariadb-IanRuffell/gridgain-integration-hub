@@ -234,6 +234,34 @@ data movement. These have no equivalent in either source system:
 - **`DisruptionImpactTask`** (`GET /api/v1/flights/{id}/impact`): the passengers of a delayed or cancelled flight, ranked by tier, cabin and retail
   spend, each with the base compensation and a tier-weighted suggested amount (Sybase's loyalty multiplier x Oracle's fare).
 
+### Offers from buying behaviour: an in-cluster recommender (`RecommendOffersTask`)
+
+A job that generates personalised offers for every customer, using what they bought (Sybase), their churn risk (the scoring job) and their next
+flight (Oracle). It is a statistical recommender, not an LLM: it runs entirely on the cluster nodes and no customer data leaves them.
+
+- **Where it runs**: one job per node, only for the customers that node owns. Purchase history, churn band and next flight are read with local
+  queries (everything is colocated on `customer_id`); the one cluster-wide input is a small aggregate of what each loyalty tier buys.
+- **Score** of a product for a customer = (category affinity + 0.8 x tier peers + repurchase + trip) x price fit. Affinity is the share of
+  the customer's spend in the product's category, each purchase decayed with a 90-day half-life. Peers is the share of the customer's tier that
+  has bought the product ("customers like you"). Repurchase boosts consumables (lounge, insurance, ancillaries) last bought over 30 days ago. Trip
+  boosts hotels, lounge, insurance, ancillaries and upgrades when a confirmed flight departs within 45 days; if that flight is delayed 3 hours or
+  more or cancelled, only a lounge offer is boosted (goodwill). Price fit damps products that cost more than twice the customer's average unit price.
+- **Rules**: never an inactive or out-of-stock product, nothing bought in the last 30 days, at most two offers per category, top N (default 3).
+  **Discount** = tier (0/5/8/10 %) + churn risk (0/3/7 %) + 5 % for a disrupted flight, capped at 20 %. Every offer carries a plain-language reason
+  (for example "97% of your recent spend is on lounge; you fly DEL-DXB on 2026-10-20") and expires after 14 days.
+- **Output**: table `customer_offer` (colocated on `customer_id`, primary key customer + product). Each run replaces the customer's previous offers,
+  so it is idempotent. The scoring logic is a plain class, `OfferModel`, with its own unit tests.
+
+```bash
+phase2/run.sh offers all 3            # every customer, 3 offers each (about a second)
+phase2/run.sh offers 72 5             # one customer, 5 offers
+curl -X POST 'localhost:8080/api/v1/offers/generate?topN=3'        # the same through the API
+curl localhost:8080/api/v1/customers/72/offers                     # a customer's offers;   GET /api/v1/offers?category=HOTEL  lists them all
+```
+
+The dashboard has an **Offers** panel (totals, split by category, the strongest offers with their reasons, and a Generate button), and
+`customer_offer` appears in the table sizes as a GridGain-only table (no source system to compare with).
+
 ## GridGain cluster: 3 nodes, native persistence
 
 ```bash
@@ -273,7 +301,7 @@ cd ../api && ./build.sh               # mvn package + docker compose up --build;
 ```
 
 - Swagger UI: http://localhost:8080/swagger-ui.html, spec: [api/openapi.yaml](api/openapi.yaml)
-  (OpenAPI 3.0.1, 52 operations, generated from the controllers and DTOs by springdoc, so it cannot drift).
+  (OpenAPI 3.0.1, 56 operations, generated from the controllers and DTOs by springdoc, so it cannot drift).
 - Base path `/api/v1`. Errors are RFC 7807 problem details; list endpoints return
   `{items, limit, offset, total}`; timestamps are ISO-8601 UTC.
 
@@ -330,7 +358,7 @@ those. `run.sh init` does not touch them.
 
 `http://localhost:8080/` (also `/dashboard.html`) is served by the API container, no external libraries. It shows:
 
-- **Table sizes**: all 17 tables, colour-coded by source system, GridGain rows next to the rows last counted in Sybase or Oracle by the
+- **Table sizes**: all 18 tables (17 replicated plus the GridGain-only `customer_offer`), colour-coded by source system, GridGain rows next to the rows last counted in Sybase or Oracle by the
   CDC reader, with a delta. A positive delta means GridGain holds rows the source does not (rows created through the REST API or compute jobs,
   or the leftovers of `smoke-test.sh`), or the source count is a few seconds behind during a burst.
 - **Live graphs** (last 1/5/15 minutes, 2-second samples): CDC events/s, backlog and latency for **Sybase and Oracle side by side**, REST requests/s
@@ -357,8 +385,8 @@ compares a Sybase timestamp with the reader's clock, so it is approximate if the
 |---|---|---|
 | `tests/python` | 36 | the four generators (`generate_seed.py`, `generate_cdc.py` for both sources): row counts, determinism, primary and foreign keys, money totals, seat and inventory consistency, one trigger per replicated table with the right keys, and that `hub/queries.sql` only uses tables and columns that exist in the GridGain schemas |
 | `cdc/src/test` | 36 | table specs and generated SQL, the Sybase and Oracle table definitions checked against the GridGain DDL, key encoding, value normalisation used by `verify`, statement binding, and the stats publisher (`Metrics`) against a mocked connection |
-| `phase2/src/test` | 109 | the shared rules (seat numbers, miles, refund share, churn score and band, compensation share, service priority), map/reduce of the tasks, the CLI argument parsing and the parity comparison rules |
-| `api/src/test` | 110 | every controller through MockMvc (validation, filters, error mapping to RFC 7807), the DTO constraints, `ComputeService` error mapping and argument building, the dashboard rate calculations, request metrics and the JDBC column reader |
+| `phase2/src/test` | 144 | the shared rules (seat numbers, miles, refund share, churn score and band, compensation share, service priority), the offer recommender, map/reduce of the tasks, the CLI argument parsing and the parity comparison rules |
+| `api/src/test` | 120 | every controller through MockMvc (validation, filters, error mapping to RFC 7807), the DTO constraints, `ComputeService` error mapping and argument building, the dashboard rate calculations, request metrics and the JDBC column reader |
 
 Not covered by unit tests: the SQL inside the repositories and the compute jobs' queries. Those need a real cluster and are checked by the parity harness (`phase2/run.sh parity all` and `parity oracle`), the API smoke test (`api/smoke-test.sh`) and `cdc/run.sh verify`.
 

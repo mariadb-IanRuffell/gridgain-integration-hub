@@ -9,6 +9,8 @@ import org.apache.ignite.IgniteException;
 import org.apache.ignite.client.ClientException;
 import org.apache.ignite.client.IgniteClient;
 import org.springframework.stereotype.Service;
+import poc.api.model.Dto.CategoryCount;
+import poc.api.model.Dto.OfferRun;
 import poc.api.model.Dto.PlaceOrderRequest;
 import poc.api.model.Dto.PlaceOrderResult;
 import poc.api.model.TravelDto.BookFlightRequest;
@@ -179,5 +181,23 @@ public class ComputeService {
         Map<String, Object> r = run("DisruptionImpactTask", flightId);
         r.remove("rc");
         return r;
+    }
+
+    // ------------------------------------------------------------------ offers
+
+    /** Runs the recommender on every node (or just the node owning one customer) and writes the offers to customer_offer. */
+    @SuppressWarnings("unchecked")
+    public OfferRun generateOffers(int topN, Integer customerId) {
+        Map<String, Object> arg = new HashMap<>();
+        arg.put("top_n", topN);
+        if (customerId != null) arg.put("customer_id", customerId);
+        Map<String, Object> r = checked(run("RecommendOffersTask", arg), "Customer", customerId);
+        List<CategoryCount> cats = new ArrayList<>();
+        for (Object o : (List<Object>) r.get("by_category")) {
+            Map<String, Object> m = (Map<String, Object>) o;
+            cats.add(new CategoryCount((String) m.get("category"), ((Number) m.get("offers")).longValue()));
+        }
+        return new OfferRun(((Number) r.get("customers")).longValue(), ((Number) r.get("customers_with_offers")).longValue(),
+            ((Number) r.get("offers")).longValue(), ((Number) r.get("avg_discount_pct")).doubleValue(), ((Number) r.get("avg_score")).doubleValue(), cats);
     }
 }

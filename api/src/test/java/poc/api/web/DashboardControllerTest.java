@@ -14,6 +14,8 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.web.servlet.MockMvc;
 import poc.api.config.WebConfig;
 import poc.api.service.DashboardService;
+import poc.api.model.Dto.CategoryCount;
+import poc.api.model.Dto.OfferSummary;
 import poc.api.service.DashboardService.*;
 
 @WebMvcTest
@@ -21,6 +23,7 @@ import poc.api.service.DashboardService.*;
 class DashboardControllerTest {
     @Autowired MockMvc mvc;
     @MockBean DashboardService dashboard;
+    @MockBean poc.api.repo.OfferRepository offers;
 
     @Test
     void summaryIsSerialisedWithNullsOmitted() throws Exception {
@@ -41,6 +44,15 @@ class DashboardControllerTest {
         mvc.perform(get("/api/v1/dashboard/series?since=1234")).andExpect(status().isOk()).andExpect(jsonPath("$.intervalMs").value(2000));
         mvc.perform(get("/api/v1/dashboard/series?since=abc")).andExpect(status().isBadRequest());
         verify(dashboard).series(1234L);
+    }
+
+    @Test
+    void offersSummaryForThePanel() throws Exception {
+        when(offers.summary(8)).thenReturn(new OfferSummary(720, 240, 5.03, Instant.parse("2026-10-19T09:00:00Z"),
+            List.of(new CategoryCount("FLIGHT", 360L)), List.of()));
+        mvc.perform(get("/api/v1/dashboard/offers")).andExpect(status().isOk())
+            .andExpect(jsonPath("$.offers").value(720)).andExpect(jsonPath("$.customers").value(240))
+            .andExpect(jsonPath("$.byCategory[0].category").value("FLIGHT")).andExpect(jsonPath("$.lastGenerated").value("2026-10-19T09:00:00Z"));
     }
 
     @Test

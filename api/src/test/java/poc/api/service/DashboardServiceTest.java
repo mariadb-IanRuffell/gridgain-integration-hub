@@ -50,8 +50,8 @@ class DashboardServiceTest {
     void firstSampleBuildsTheSummaryButNoSeriesPoint() {
         service.sample();
         Summary s = service.summary();
-        assertEquals(17, s.tables().size());
-        assertEquals(170, s.totalGridgainRows());
+        assertEquals(18, s.tables().size());
+        assertEquals(170, s.totalGridgainRows());      // the GridGain-only customer_offer table is not part of the replicated totals
         assertEquals(3, s.cluster().nodes());
         assertEquals(List.of("node1", "node2", "node3"), s.cluster().nodeIds());
         assertTrue(service.series(0).samples().isEmpty());      // rates need two snapshots
@@ -80,17 +80,28 @@ class DashboardServiceTest {
     @Test
     void totalSourceRowsIsReportedOnceEveryTableHasACount() {
         Map<String, SourceCount> all = new LinkedHashMap<>();
-        DashboardRepository.TABLES.forEach(t -> all.put(t.name(), new SourceCount(10, Instant.now())));
+        DashboardRepository.TABLES.stream().filter(t -> !DashboardRepository.NATIVE.equals(t.source()))
+            .forEach(t -> all.put(t.name(), new SourceCount(10, Instant.now())));
         when(repo.sourceRows()).thenReturn(all);
         service.sample();
-        assertEquals(170L, service.summary().totalSourceRows());
+        assertEquals(170L, service.summary().totalSourceRows());     // customer_offer has no source count and does not block the total
+    }
+
+    @Test
+    void gridGainOnlyTablesAreListedWithoutASourceComparison() {
+        service.sample();
+        TableSize offers = service.summary().tables().stream().filter(t -> t.name().equals("customer_offer")).findFirst().orElseThrow();
+        assertEquals("gridgain", offers.source());
+        assertEquals(10, offers.gridgainRows());
+        assertNull(offers.sourceRows());
+        assertNull(offers.difference());
     }
 
     @Test
     void missingCdcCountsDoNotBreakTheSummary() {
         when(repo.sourceRows()).thenThrow(new RuntimeException("cdc_table_counts does not exist"));
         service.sample();
-        assertEquals(17, service.summary().tables().size());
+        assertEquals(18, service.summary().tables().size());
     }
 
     @Test

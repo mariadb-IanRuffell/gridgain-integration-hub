@@ -632,13 +632,51 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/PlaceOrderResult"
+  /api/v1/offers/generate:
+    post:
+      tags:
+      - Offers
+      summary: Generate offers
+      description: "Runs the recommender job on every cluster node; each node scores\
+        \ the products for the customers it owns from their order history (recency-weighted\
+        \ category affinity, what similar-tier customers buy, repurchase of consumables,\
+        \ an upcoming or disrupted flight from the Oracle travel data) and writes\
+        \ the top offers to customer_offer, replacing the customer's previous ones.\
+        \ Discounts come from loyalty tier, churn risk and flight disruption (max\
+        \ 20%). Pass customerId to generate for one customer only (404 if unknown\
+        \ or inactive). Nothing leaves the cluster."
+      operationId: generate
+      parameters:
+      - name: topN
+        in: query
+        description: Offers per customer
+        required: false
+        schema:
+          maximum: 10
+          minimum: 1
+          type: integer
+          format: int32
+          default: 3
+      - name: customerId
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/OfferRun"
   /api/v1/flights:
     get:
       tags:
       - Flights
       summary: List flights
       description: "Filter by route, status and departure window; soonest first."
-      operationId: list_2
+      operationId: list_3
       parameters:
       - name: origin
         in: query
@@ -825,7 +863,7 @@ paths:
       summary: List customers
       description: "Filter by status, loyalty tier, exact email, or a name fragment;\
         \ paged."
-      operationId: list_3
+      operationId: list_4
       parameters:
       - name: status
         in: query
@@ -931,7 +969,7 @@ paths:
       - Interactions
       summary: List a customer's service interactions
       description: Newest first.
-      operationId: list_4
+      operationId: list_5
       parameters:
       - name: customerId
         in: path
@@ -1001,7 +1039,7 @@ paths:
       tags:
       - Addresses
       summary: List a customer's addresses
-      operationId: list_5
+      operationId: list_6
       parameters:
       - name: customerId
         in: path
@@ -1051,7 +1089,7 @@ paths:
       summary: List bookings
       description: "Newest first. customerId is the Sybase customer id. Segments are\
         \ only included by GET /bookings/{id}."
-      operationId: list_6
+      operationId: list_7
       parameters:
       - name: customerId
         in: query
@@ -1144,6 +1182,57 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/CancelBookingResult"
+  /api/v1/offers:
+    get:
+      tags:
+      - Offers
+      summary: List offers
+      description: "Filter by customer or product category; ordered by customer, then\
+        \ rank."
+      operationId: list_2
+      parameters:
+      - name: customerId
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+      - name: category
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - FLIGHT
+          - HOTEL
+          - LOUNGE
+          - UPGRADE
+          - INSURANCE
+          - ANCILLARY
+      - name: limit
+        in: query
+        required: false
+        schema:
+          maximum: 500
+          minimum: 1
+          type: integer
+          format: int32
+          default: 50
+      - name: offset
+        in: query
+        required: false
+        schema:
+          minimum: 0
+          type: integer
+          format: int32
+          default: 0
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PageOffer"
   /api/v1/loyalty-tiers:
     get:
       tags:
@@ -1252,6 +1341,21 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/Series"
+  /api/v1/dashboard/offers:
+    get:
+      tags:
+      - Dashboard
+      summary: Offer totals for the dashboard
+      description: "How many offers exist, for how many customers, the average discount,\
+        \ the split by category and the strongest offers."
+      operationId: offers
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/OfferSummary"
   /api/v1/customers/{customerId}/trips:
     get:
       tags:
@@ -1298,6 +1402,29 @@ paths:
             '*/*':
               schema:
                 $ref: "#/components/schemas/CustomerScore"
+  /api/v1/customers/{customerId}/offers:
+    get:
+      tags:
+      - Offers
+      summary: A customer's current offers
+      description: Best first. Empty until offers have been generated for the customer.
+      operationId: forCustomer
+      parameters:
+      - name: customerId
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int32
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Offer"
   /api/v1/customers/{customerId}/loyalty-transactions:
     get:
       tags:
@@ -1461,7 +1588,7 @@ paths:
       summary: List airports
       description: "Reference data from the Oracle travel system, replicated to every\
         \ GridGain node."
-      operationId: list_7
+      operationId: list_8
       responses:
         "200":
           description: OK
@@ -1976,6 +2103,36 @@ components:
         loyaltyPoints:
           type: integer
           format: int32
+    CategoryCount:
+      type: object
+      properties:
+        category:
+          type: string
+        offers:
+          type: integer
+          format: int64
+    OfferRun:
+      type: object
+      properties:
+        customers:
+          type: integer
+          format: int64
+        customersWithOffers:
+          type: integer
+          format: int64
+        offers:
+          type: integer
+          format: int64
+        avgDiscountPct:
+          type: number
+          format: double
+        avgScore:
+          type: number
+          format: double
+        byCategory:
+          type: array
+          items:
+            $ref: "#/components/schemas/CategoryCount"
     DelayRequest:
       required:
       - minutes
@@ -2097,6 +2254,58 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Order"
+        limit:
+          type: integer
+          format: int32
+        offset:
+          type: integer
+          format: int32
+        total:
+          type: integer
+          format: int64
+    Offer:
+      type: object
+      properties:
+        customerId:
+          type: integer
+          format: int32
+        rank:
+          type: integer
+          format: int32
+        productId:
+          type: integer
+          format: int32
+        sku:
+          type: string
+        productName:
+          type: string
+        category:
+          type: string
+        score:
+          type: number
+          format: double
+        discountPct:
+          type: integer
+          format: int32
+        listPrice:
+          type: number
+        offerPrice:
+          type: number
+        reason:
+          type: string
+        generatedAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+    PageOffer:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Offer"
         limit:
           type: integer
           format: int32
@@ -2328,6 +2537,29 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Sample"
+    OfferSummary:
+      type: object
+      properties:
+        offers:
+          type: integer
+          format: int64
+        customers:
+          type: integer
+          format: int64
+        avgDiscountPct:
+          type: number
+          format: double
+        lastGenerated:
+          type: string
+          format: date-time
+        byCategory:
+          type: array
+          items:
+            $ref: "#/components/schemas/CategoryCount"
+        top:
+          type: array
+          items:
+            $ref: "#/components/schemas/Offer"
     PageCustomer:
       type: object
       properties:

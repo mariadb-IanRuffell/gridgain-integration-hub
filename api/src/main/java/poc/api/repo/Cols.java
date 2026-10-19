@@ -16,6 +16,11 @@ final class Cols {
         this.rs = rs;
     }
 
+    Double dbl() throws SQLException {
+        double v = rs.getDouble(++i);
+        return rs.wasNull() ? null : v;
+    }
+
     Integer integer() throws SQLException {
         int v = rs.getInt(++i);
         return rs.wasNull() ? null : v;

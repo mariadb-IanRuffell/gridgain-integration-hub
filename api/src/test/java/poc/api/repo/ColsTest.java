@@ -48,6 +48,17 @@ class ColsTest {
     }
 
     @Test
+    void doublesKeepNullness() throws SQLException {
+        ResultSet rs = mock(ResultSet.class);
+        when(rs.getDouble(1)).thenReturn(1.25);
+        when(rs.getDouble(2)).thenReturn(0.0);
+        when(rs.wasNull()).thenReturn(false, true);
+        Cols c = new Cols(rs);
+        assertEquals(1.25, c.dbl());
+        assertNull(c.dbl());
+    }
+
+    @Test
     void stripsOnlyTrailingWhitespace() throws SQLException {
         ResultSet rs = mock(ResultSet.class);
         when(rs.getString(1)).thenReturn("  a b  ");

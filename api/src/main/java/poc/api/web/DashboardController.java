@@ -6,6 +6,8 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import poc.api.model.Dto.OfferSummary;
+import poc.api.repo.OfferRepository;
 import poc.api.service.DashboardService;
 import poc.api.service.DashboardService.Series;
 import poc.api.service.DashboardService.Summary;
@@ -16,9 +18,11 @@ import poc.api.service.DashboardService.Summary;
 @Tag(name = "Dashboard")
 public class DashboardController {
     private final DashboardService dashboard;
+    private final OfferRepository offers;
 
-    DashboardController(DashboardService dashboard) {
+    DashboardController(DashboardService dashboard, OfferRepository offers) {
         this.dashboard = dashboard;
+        this.offers = offers;
     }
 
     @GetMapping("/summary")
@@ -36,5 +40,12 @@ public class DashboardController {
             + "you have> to get only newer samples.")
     Series series(@RequestParam(defaultValue = "0") long since) {
         return dashboard.series(since);
+    }
+
+    @GetMapping("/offers")
+    @Operation(summary = "Offer totals for the dashboard",
+        description = "How many offers exist, for how many customers, the average discount, the split by category and the strongest offers.")
+    OfferSummary offers() {
+        return offers.summary(8);
     }
 }

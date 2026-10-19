@@ -150,6 +150,25 @@ req POST "/flights/$FID/cancel" '{"reason":"smoke test"}'; status 200 "cancel th
 req POST "/flights/$FID/cancel" '{"reason":"again"}'; status 409 "cancelling a cancelled flight is 409"
 req DELETE "/flights/$FID"; status 409 "flight with bookings cannot be deleted"
 
+echo "== offers (recommender job)"
+req POST "/offers/generate?topN=3&customerId=72"; status 200 "generate offers for one customer"; field .customers 1 "one customer processed"
+field '.offers >= 1 and .offers <= 3' true "between one and three offers"
+req GET "/customers/72/offers"; status 200 "customer's offers"; field '[.[].rank] == ([range(1; length + 1)])' true "ranks run 1..n"
+field '[.[] | select(.discountPct > 20 or .offerPrice > .listPrice)] | length' 0 "discount capped at 20% and never above list price"
+field '[.[].category] | group_by(.) | map(length) | max <= 2' true "at most two offers per category"
+field '[.[].score] == ([.[].score] | sort | reverse)' true "best offer first"
+for PID in $(echo "$BODY" | jq -r '.[].productId'); do
+  req GET "/products/$PID"; [ "$(echo "$BODY" | jq -r '.active and .stockQty > 0')" = true ] && ok "offered product $PID is active and in stock" || bad "offered product $PID is active and in stock"
+done
+req GET "/offers?customerId=72"; field '.total == (.items | length)' true "offer list agrees with the customer's offers"
+req GET "/offers?category=CARS"; status 400 "invalid category filter is a 400"
+req POST "/offers/generate?customerId=999999999"; status 404 "unknown customer is 404"
+req POST "/offers/generate?topN=0"; status 400 "topN validation"
+req GET /customers/999999999/offers; status 404 "offers for unknown customer is 404"
+req POST "/offers/generate?topN=3"; status 200 "generate offers for every customer"; field '.customersWithOffers > 100' true "most customers get offers"
+field '.avgDiscountPct <= 20' true "average discount within the cap"
+req GET /dashboard/offers; status 200 "dashboard offer summary"; field '.offers > 100 and (.top | length) > 0' true "summary lists offers"
+
 echo "== cleanup: customer without orders can be deleted"
 req POST /customers "{\"firstName\":\"Temp\",\"lastName\":\"Delete$RUN\",\"email\":\"temp$RUN@example.com\"}"; T=$(echo "$BODY" | jq -r .customerId)
 req POST "/customers/$T/addresses" '{"addrType":"HOME","line1":"x","city":"y","country":"AE"}'

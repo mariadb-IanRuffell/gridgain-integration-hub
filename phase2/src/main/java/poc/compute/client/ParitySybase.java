@@ -4,7 +4,6 @@ import java.math.BigDecimal;
 import java.sql.CallableStatement;
 import java.sql.Connection;
 import java.sql.DriverManager;
-import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
@@ -22,14 +21,14 @@ import org.apache.ignite.client.IgniteClient;
  * and compare the outputs value by value. Sybase is reached over jTDS, GridGain over the thin client
  * (compute) and thin JDBC (reading tables back).
  */
-final class Parity {
+final class ParitySybase {
     private static final String PKG = Main.PKG;
 
     private final ClientCompute compute;
     private Connection ase, gg;
     private int passed, failed;
 
-    Parity(IgniteClient client) {
+    ParitySybase(IgniteClient client) {
         this.compute = client.compute().withTimeout(120_000);
     }
 

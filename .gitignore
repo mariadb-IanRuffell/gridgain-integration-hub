@@ -18,3 +18,7 @@ demo/frames/
 demo/data/ev-*.json
 demo/tts/
 __pycache__/
+# IDE metadata
+.classpath
+.project
+.settings/

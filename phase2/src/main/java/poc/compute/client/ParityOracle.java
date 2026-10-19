@@ -35,13 +35,13 @@ final class ParityOracle {
     }
 
     boolean run() throws Exception {
-        ora = DriverManager.getConnection(Parity.env("ORA_URL", "jdbc:oracle:thin:@//localhost:1521/FREEPDB1"),
-            Parity.env("ORA_USER", "travel"), Parity.env("ORA_PASSWORD", "travel"));
-        gg = DriverManager.getConnection(Parity.env("GG_JDBC", "jdbc:ignite:thin://127.0.0.1:10800,127.0.0.1:10801,127.0.0.1:10802"));
+        ora = DriverManager.getConnection(ParitySybase.env("ORA_URL", "jdbc:oracle:thin:@//localhost:1521/FREEPDB1"),
+            ParitySybase.env("ORA_USER", "travel"), ParitySybase.env("ORA_PASSWORD", "travel"));
+        gg = DriverManager.getConnection(ParitySybase.env("GG_JDBC", "jdbc:ignite:thin://127.0.0.1:10800,127.0.0.1:10801,127.0.0.1:10802"));
         try {
             List<List<Object>> o = new ArrayList<>(), g = new ArrayList<>();
             for (String q : SNAPSHOT) { o.addAll(ora(q)); g.addAll(gg(q)); }
-            String pre = Parity.compareRows(o, g);
+            String pre = ParitySybase.compareRows(o, g);
             if (pre != null) {
                 check("GridGain in sync with Oracle before the test (stop gg-cdc-oracle, then CDC_SOURCE=oracle ./run.sh init)", false, pre);
                 return false;
@@ -70,7 +70,7 @@ final class ParityOracle {
 
     private void trips() throws Exception {
         System.out.println("== sp_customer_trips vs TripsTask (every customer with bookings, plus one without)");
-        List<Integer> ids = Parity.ints(ora, "select distinct customer_id from booking order by 1");
+        List<Integer> ids = ParitySybase.ints(ora, "select distinct customer_id from booking order by 1");
         ids.add(999999);
         int bad = 0;
         for (int cid : ids) {
@@ -84,7 +84,7 @@ final class ParityOracle {
             Map<String, Object> job = compute.execute(PKG + "TripsTask", cid);
             String[] sets = {"upcoming", "past", "stats"};
             for (int s = 0; s < 3; s++) {
-                String diff = Parity.compareRows(exp.get(s), Parity.rows((List<?>) job.get(sets[s])));
+                String diff = ParitySybase.compareRows(exp.get(s), ParitySybase.rows((List<?>) job.get(sets[s])));
                 if (diff != null && bad++ < 4) System.out.println("   customer " + cid + " set '" + sets[s] + "': " + diff);
             }
         }
@@ -96,11 +96,11 @@ final class ParityOracle {
     private void bookFlight() throws Exception {
         System.out.println("== sp_book_flight vs BookFlightTask");
         int cid = 12;
-        int fid = Parity.scalarInt(ora, "select min(f.flight_id) from flight f join flight_inventory i on i.flight_id = f.flight_id and i.cabin = 'BUSINESS' "
+        int fid = ParitySybase.scalarInt(ora, "select min(f.flight_id) from flight f join flight_inventory i on i.flight_id = f.flight_id and i.cabin = 'BUSINESS' "
             + "where f.status = 'SCHEDULED' and f.dep_time > sys_extract_utc(systimestamp) + interval '5' day and i.seats_available > 0");
         System.out.println("   customer " + cid + ", flight " + fid + ", BUSINESS");
         String inv = "select seats_available, next_seat, base_fare from flight_inventory where flight_id = " + fid + " and cabin = 'BUSINESS'";
-        check("starting inventory identical", Parity.compareRows(ora(inv), gg(inv)) == null, "");
+        check("starting inventory identical", ParitySybase.compareRows(ora(inv), gg(inv)) == null, "");
 
         long oraBooking; String oraRef;
         try (CallableStatement cs = ora.prepareCall("{call sp_book_flight(?, ?, ?, ?, ?, ?, ?)}")) {
@@ -116,12 +116,12 @@ final class ParityOracle {
 
         String oraSeg = "select s.seat_no, s.fare, s.miles_earned, s.status, s.cabin, s.passenger_name, b.status, b.total_fare, b.channel, b.currency "
             + "from booking_segment s join booking b on b.booking_id = s.booking_id where b.booking_id = ";
-        check("booking, segment, seat, fare and miles identical", Parity.compareRows(ora(oraSeg + oraBooking), gg(oraSeg + ggBooking)) == null,
+        check("booking, segment, seat, fare and miles identical", ParitySybase.compareRows(ora(oraSeg + oraBooking), gg(oraSeg + ggBooking)) == null,
             ora(oraSeg + oraBooking) + " vs " + gg(oraSeg + ggBooking));
-        oraTestSegment = Parity.scalarInt(ora, "select segment_id from booking_segment where booking_id = " + oraBooking);
-        ggTestSegment = Parity.scalarInt(gg, "select segment_id from booking_segment where booking_id = " + ggBooking);
+        oraTestSegment = ParitySybase.scalarInt(ora, "select segment_id from booking_segment where booking_id = " + oraBooking);
+        ggTestSegment = ParitySybase.scalarInt(gg, "select segment_id from booking_segment where booking_id = " + ggBooking);
         check("booking_ref is 6 letters", ((String) job.get("booking_ref")).length() == 6 && oraRef.length() == 6, "");
-        check("seat inventory identical afterwards", Parity.compareRows(ora(inv), gg(inv)) == null, ora(inv) + " vs " + gg(inv));
+        check("seat inventory identical afterwards", ParitySybase.compareRows(ora(inv), gg(inv)) == null, ora(inv) + " vs " + gg(inv));
     }
 
     // ------------------------------------------------------------------ sp_cancel_booking
@@ -129,12 +129,12 @@ final class ParityOracle {
     private void cancelBooking() throws Exception {
         System.out.println("== sp_cancel_booking vs CancelBookingTask");
         // (a) every segment future and ticketed: full cancellation
-        int full = Parity.scalarInt(ora, "select min(b.booking_id) from booking b where b.status = 'CONFIRMED' and exists (select 1 from booking_segment where booking_id = b.booking_id) "
+        int full = ParitySybase.scalarInt(ora, "select min(b.booking_id) from booking b where b.status = 'CONFIRMED' and exists (select 1 from booking_segment where booking_id = b.booking_id) "
             + "and not exists (select 1 from booking_segment s join flight f on f.flight_id = s.flight_id where s.booking_id = b.booking_id "
             + "and (s.status <> 'TICKETED' or f.dep_time < sys_extract_utc(systimestamp) + interval '100' hour)) and b.booking_id < 1000000");
         cancelCase("full cancellation of booking " + full, full);
         // (b) partly flown: one flown segment stays, the future one is cancelled, booking remains CONFIRMED
-        int partial = Parity.scalarInt(ora, "select min(b.booking_id) from booking b where b.status = 'CONFIRMED' "
+        int partial = ParitySybase.scalarInt(ora, "select min(b.booking_id) from booking b where b.status = 'CONFIRMED' "
             + "and exists (select 1 from booking_segment where booking_id = b.booking_id and status = 'FLOWN') "
             + "and exists (select 1 from booking_segment s join flight f on f.flight_id = s.flight_id where s.booking_id = b.booking_id "
             + "and s.status = 'TICKETED' and f.dep_time > sys_extract_utc(systimestamp) + interval '100' hour) and b.booking_id < 1000000");
@@ -152,7 +152,7 @@ final class ParityOracle {
             refund = cs.getBigDecimal(2).doubleValue();
         }
         Map<String, Object> job = compute.execute(PKG + "CancelBookingTask", bookingId);
-        check(what + ": refund " + refund, Parity.same(BigDecimal.valueOf(refund), job.get("refund")), refund + " vs " + job.get("refund"));
+        check(what + ": refund " + refund, ParitySybase.same(BigDecimal.valueOf(refund), job.get("refund")), refund + " vs " + job.get("refund"));
         // GridGain has no listagg; assemble the same string from the segment rows
         String ggState = "select b.status, b.refunded from booking b where b.booking_id = " + bookingId;
         List<List<Object>> o = ora(state), g = gg(ggState);
@@ -160,16 +160,16 @@ final class ParityOracle {
         StringBuilder gs = new StringBuilder();
         for (List<Object> r : gg("select status from booking_segment where booking_id = " + bookingId + " order by segment_id")) gs.append(gs.length() > 0 ? "," : "").append(r.get(0));
         check(what + ": booking status, refunded and segment statuses identical",
-            Parity.same(o.get(0).get(0), g.get(0).get(0)) && Parity.same(o.get(0).get(1), g.get(0).get(1)) && oSegs.equals(gs.toString()),
+            ParitySybase.same(o.get(0).get(0), g.get(0).get(0)) && ParitySybase.same(o.get(0).get(1), g.get(0).get(1)) && oSegs.equals(gs.toString()),
             o + " vs " + g + " segs " + gs);
-        check(what + ": seats released identically", Parity.compareRows(ora(invSum), gg(invSum)) == null, ora(invSum) + " vs " + gg(invSum));
+        check(what + ": seats released identically", ParitySybase.compareRows(ora(invSum), gg(invSum)) == null, ora(invSum) + " vs " + gg(invSum));
     }
 
     // ------------------------------------------------------------------ sp_record_delay / sp_cancel_flight
 
     private void flightOps() throws Exception {
         System.out.println("== sp_record_delay / sp_cancel_flight vs RecordDelayTask");
-        List<Integer> flights = Parity.ints(ora, "select flight_id from (select f.flight_id from flight f where f.status = 'SCHEDULED' "
+        List<Integer> flights = ParitySybase.ints(ora, "select flight_id from (select f.flight_id from flight f where f.status = 'SCHEDULED' "
             + "and f.dep_time > sys_extract_utc(systimestamp) + interval '8' day and exists (select 1 from booking_segment s where s.flight_id = f.flight_id "
             + "and s.status = 'TICKETED') order by f.flight_id) fetch first 2 rows only");
         int delayed = flights.get(0), cancelled = flights.get(1);
@@ -184,8 +184,8 @@ final class ParityOracle {
         check("delay flight " + delayed + ": affected bookings " + oAff, oAff == ((Number) job.get("affected_bookings")).longValue(), oAff + " vs " + job.get("affected_bookings"));
         String fl = "select status, delay_minutes from flight where flight_id = " + delayed;
         String ev = "select event_type, detail from flight_event where flight_id = " + delayed + " and detail like '%parity test%'";
-        check("flight status and delay identical", Parity.compareRows(ora(fl), gg(fl)) == null, ora(fl) + " vs " + gg(fl));
-        check("flight event type and text identical", Parity.compareRows(ora(ev), gg(ev)) == null, ora(ev) + " vs " + gg(ev));
+        check("flight status and delay identical", ParitySybase.compareRows(ora(fl), gg(fl)) == null, ora(fl) + " vs " + gg(fl));
+        check("flight event type and text identical", ParitySybase.compareRows(ora(ev), gg(ev)) == null, ora(ev) + " vs " + gg(ev));
 
         try (CallableStatement cs = ora.prepareCall("{call sp_cancel_flight(?, ?, ?)}")) {
             cs.setInt(1, cancelled); cs.setString(2, "parity test"); cs.registerOutParameter(3, Types.NUMERIC);
@@ -197,7 +197,7 @@ final class ParityOracle {
         check("cancel flight " + cancelled + ": affected bookings " + oAff, oAff == ((Number) job.get("affected_bookings")).longValue(), oAff + " vs " + job.get("affected_bookings"));
         fl = "select status, delay_minutes from flight where flight_id = " + cancelled;
         ev = "select event_type, detail from flight_event where flight_id = " + cancelled + " and detail like '%parity test%'";
-        check("cancelled flight status and event identical", Parity.compareRows(ora(fl), gg(fl)) == null && Parity.compareRows(ora(ev), gg(ev)) == null,
+        check("cancelled flight status and event identical", ParitySybase.compareRows(ora(fl), gg(fl)) == null && ParitySybase.compareRows(ora(ev), gg(ev)) == null,
             "" + ora(fl) + ora(ev) + " vs " + gg(fl) + gg(ev));
     }
 
@@ -215,25 +215,25 @@ final class ParityOracle {
         Map<String, Object> a = new HashMap<>();
         a.put("min_delay", 180); a.put("as_of", asOf);
         List<?> job = compute.execute(PKG + "ProcessDisruptionsTask", a);
-        check("summary by reason (reason, segments, total_amount)", Parity.compareRows(exp, Parity.rows(job)) == null, exp + " vs " + Parity.rows(job));
+        check("summary by reason (reason, segments, total_amount)", ParitySybase.compareRows(exp, ParitySybase.rows(job)) == null, exp + " vs " + ParitySybase.rows(job));
         // every seeded segment must match exactly, id included; the one test booking each system made has a different id by design
         String cols = "select segment_id, amount, reason, created_at from compensation where segment_id <> ";
         List<List<Object>> o = ora(cols + oraTestSegment + " order by segment_id"), g = gg(cols + ggTestSegment + " order by segment_id");
-        String diff = Parity.compareRows(o, g);
+        String diff = ParitySybase.compareRows(o, g);
         check("compensation identical for the " + o.size() + " seeded segments (id, amount, reason, created_at)", diff == null, String.valueOf(diff));
         String t = "select amount, reason, created_at from compensation where segment_id = ";
         check("compensation for the test booking identical apart from its id (amount, reason, created_at)",
-            Parity.compareRows(ora(t + oraTestSegment), gg(t + ggTestSegment)) == null, ora(t + oraTestSegment) + " vs " + gg(t + ggTestSegment));
+            ParitySybase.compareRows(ora(t + oraTestSegment), gg(t + ggTestSegment)) == null, ora(t + oraTestSegment) + " vs " + gg(t + ggTestSegment));
     }
 
     // ------------------------------------------------------------------ error behaviour
 
     private void errors() throws Exception {
         System.out.println("== error behaviour: same error number for the same bad input");
-        int open = Parity.scalarInt(ora, "select min(flight_id) from flight where status = 'SCHEDULED' and dep_time > sys_extract_utc(systimestamp) + interval '20' day");
-        int past = Parity.scalarInt(ora, "select min(flight_id) from flight where status = 'ARRIVED'");
-        int cancelledFlight = Parity.scalarInt(ora, "select min(flight_id) from flight where status = 'CANCELLED'");
-        int cancelledBooking = Parity.scalarInt(ora, "select min(booking_id) from booking where status = 'CANCELLED'");
+        int open = ParitySybase.scalarInt(ora, "select min(flight_id) from flight where status = 'SCHEDULED' and dep_time > sys_extract_utc(systimestamp) + interval '20' day");
+        int past = ParitySybase.scalarInt(ora, "select min(flight_id) from flight where status = 'ARRIVED'");
+        int cancelledFlight = ParitySybase.scalarInt(ora, "select min(flight_id) from flight where status = 'CANCELLED'");
+        int cancelledBooking = ParitySybase.scalarInt(ora, "select min(booking_id) from booking where status = 'CANCELLED'");
 
         bookError("book: unknown flight", 20103, 12, 999999, "ECONOMY", "A Passenger");
         bookError("book: invalid cabin", 20105, 12, open, "PREMIUM", "A Passenger");
@@ -303,7 +303,7 @@ final class ParityOracle {
     }
 
     private List<List<Object>> gg(String sql) throws SQLException {
-        return Parity.readAll(gg, sql);
+        return ParitySybase.readAll(gg, sql);
     }
 
     /** Oracle returns oracle.sql.TIMESTAMP from getObject; read timestamp columns through getTimestamp. */
