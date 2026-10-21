@@ -395,9 +395,40 @@ compares a MariaDB timestamp with the reader's clock, so it is approximate if th
 | `tests/python` | 38 | the four generators (`generate_seed.py`, `generate_cdc.py` for both sources): row counts, determinism, primary and foreign keys, money totals, seat and inventory consistency, one trigger per replicated table with the right keys, and that `hub/queries.sql` only uses tables and columns that exist in the GridGain schemas |
 | `cdc/src/test` | 36 | table specs and generated SQL, the MariaDB and Oracle table definitions checked against the GridGain DDL, key encoding, value normalisation used by `verify`, statement binding, and the stats publisher (`Metrics`) against a mocked connection |
 | `phase2/src/test` | 144 | the shared rules (seat numbers, miles, refund share, churn score and band, compensation share, service priority), the offer recommender, map/reduce of the tasks, the CLI argument parsing and the parity comparison rules |
+| `loadtest/src/test` | 41 | the load shape, the governor (back-off, recovery, abort), the latency histogram, the operation mix and key skew, profile clamping (including that the shipped profiles stay within the thread cap) and the report |
 | `api/src/test` | 120 | every controller through MockMvc (validation, filters, error mapping to RFC 7807), the DTO constraints, `ComputeService` error mapping and argument building, the dashboard rate calculations, request metrics and the JDBC column reader |
 
 Not covered by unit tests: the SQL inside the repositories and the compute jobs' queries. Those need a real cluster and are checked by the parity harness (`phase2/run.sh parity all` and `parity oracle`), the API smoke test (`api/smoke-test.sh`) and `cdc/run.sh verify`.
+
+## Load test: OLTP ramp up and down (`loadtest/`)
+
+A small Java load tester (thin JDBC, no JMeter) modelled on the OLTP workload of the GridGain 9 performance framework: point read, point update,
+insert, indexed range query and a two-row transfer, with skewed (hot) keys. It has its **own table** (`loadtest_account`, partitioned, one backup),
+so the hub tables are never touched. The load ramps up to a peak, holds, and ramps back down (optionally several cycles), and **a governor keeps it
+from hurting the cluster**:
+
+- **Hard thread cap** (`max_threads`, 64 by default, never above 256): a profile cannot ask for more.
+- **Governor**: after every 5-second window, if p95 latency or the error rate is over the limit for two windows in a row, the ceiling drops to 70% of the
+  current load (back off); after three healthy windows it rises again, a tenth of the peak at a time. Used threads = min(planned, ceiling).
+- **Abort**: the run stops and ramps to zero if a **server node drops out** (checked every window), if the health check itself fails three times, or if the
+  error rate stays above 20% for three windows. It also refuses to start on a degraded cluster.
+- **Bounded growth**: inserts stop after `max_insert_rows` (they become reads) and everything inserted is deleted at the end. Query timeouts are 5 s, a refused
+  connection is retried after 500 ms rather than hammered, and Ctrl-C or `./run.sh stop` ramps down cleanly and still writes the report.
+
+```bash
+cd loadtest
+./run.sh prepare oltp-updown        # create and seed the table (100k rows)
+./run.sh run smoke                  # 40 s end-to-end check (8 threads at most)
+./run.sh run oltp-updown            # about 7 minutes: ramp to 32 threads and back, twice
+./run.sh run oltp-updown peak_threads=16 cycles=1 slo_p95_ms=100     # any profile key can be overridden
+./run.sh stop                       # from another terminal: ramp down and finish
+./run.sh cleanup                    # drop the table
+```
+
+Each run writes `results/<time>-<profile>/` with `report.html` (load shape, throughput, latency against the p95 limit, throughput against load, governor events,
+top errors), `timeseries.csv` and `summary.json`. Profiles are in `loadtest/profiles/` (`smoke`, `oltp-updown`, `oltp-heavy` for finding saturation); the keys are
+documented in `Profile.java`. The "transfer" is one SQL statement updating both rows, because GridGain 8.9 SQL transactions need MVCC tables, which the persistent
+cluster does not use. Load goes straight to the cluster over JDBC, so it does not show in the dashboard's REST graphs; watch the nodes with `docker stats`.
 
 ## Environment
 

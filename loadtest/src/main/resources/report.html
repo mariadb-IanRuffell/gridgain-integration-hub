@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GridGain OLTP load test</title>
+<style>
+  :root { --bg:#f4f6f9; --card:#fff; --ink:#1c2430; --muted:#6b7686; --line:#e3e8ef; --c1:#2563eb; --c2:#0d9488; --c3:#e11d48; --c4:#d97706; --ok:#16a34a; --bad:#dc2626; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#0f141b; --card:#171e28; --ink:#e6ebf2; --muted:#93a0b4; --line:#263040; --c1:#60a5fa; --c2:#2dd4bf; --c3:#fb7185; --c4:#fbbf24; --ok:#4ade80; --bad:#f87171; } }
+  * { box-sizing: border-box; } body { margin:0; background:var(--bg); color:var(--ink); font:14px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif; }
+  main { max-width:1300px; margin:0 auto; padding:16px 20px 40px; display:grid; gap:14px; } h1 { font-size:20px; margin:0; } h2 { font-size:14px; margin:0 0 2px; }
+  .sub { color:var(--muted); font-size:13px; } .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px 16px; }
+  .kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:10px; } .kpi .l { color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.04em; }
+  .kpi .v { font-size:24px; font-weight:650; font-variant-numeric:tabular-nums; } .ok { color:var(--ok); } .bad { color:var(--bad); }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(520px,1fr)); gap:14px; } @media (max-width:600px) { .grid { grid-template-columns:1fr; } }
+  canvas { width:100%; height:220px; display:block; } .legend { display:flex; flex-wrap:wrap; gap:4px 16px; font-size:12.5px; color:var(--muted); margin:4px 0 6px; }
+  .legend span::before { content:""; display:inline-block; width:10px; height:3px; margin-right:6px; vertical-align:middle; border-radius:2px; background:var(--c); }
+  table { width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums; } td,th { padding:5px 8px; border-bottom:1px solid var(--line); text-align:left; } th { color:var(--muted); font-weight:500; font-size:12px; }
+</style></head><body><main>
+<header><h1 id="title">GridGain OLTP load test</h1><div class="sub" id="sub"></div></header>
+<section class="kpis" id="kpis"></section>
+<section class="grid">
+  <div class="card"><h2>Load shape</h2><div class="sub">planned threads, the governor's ceiling and the threads actually running</div><div class="legend" id="lg1"></div><canvas id="c1"></canvas></div>
+  <div class="card"><h2>Throughput</h2><div class="sub">operations per second and errors per second</div><div class="legend" id="lg2"></div><canvas id="c2"></canvas></div>
+  <div class="card"><h2>Latency</h2><div class="sub">p50, p95 and p99 per window, with the p95 limit</div><div class="legend" id="lg3"></div><canvas id="c3"></canvas></div>
+  <div class="card"><h2>Throughput against load</h2><div class="sub">ops/s and p95 against the number of running threads (where it flattens, the cluster is saturated)</div><div class="legend" id="lg4"></div><canvas id="c4"></canvas></div>
+</section>
+<section class="card"><h2>Governor and guardrail events</h2><table id="events"></table></section>
+<section class="card"><h2>Top errors</h2><table id="errors"></table></section>
+<script>
+const D = __DATA__;
+const $ = id => document.getElementById(id), css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const S = D.summary, rows = D.rows; // t, planned, ceiling, threads, ops/s, err/s, err%, p50, p95, p99
+$("title").textContent = "GridGain OLTP load test · " + D.profile;
+$("sub").textContent = D.started + " · " + S.seconds + " s · outcome: " + S.outcome + (S.abortReason ? " (" + S.abortReason + ")" : "");
+const kpi = (l, v, cls) => `<div class="card kpi"><div class="l">${l}</div><div class="v ${cls || ""}">${v}</div></div>`;
+$("kpis").innerHTML = kpi("Outcome", S.outcome, S.outcome === "completed" ? "ok" : S.outcome === "aborted" ? "bad" : "") + kpi("Best throughput", Math.round(S.bestOpsPerSec).toLocaleString() + " ops/s") +
+  kpi("Peak threads", S.peakThreadsReached + " of " + S.peakThreadsPlanned + " planned") + kpi("Back-offs", S.backoffs) + kpi("Operations", S.totalOps.toLocaleString()) +
+  kpi("Errors", S.totalErrors.toLocaleString() + " (" + S.errorPct + "%)", S.totalErrors ? "bad" : "ok");
+function legend(id, items) { $(id).innerHTML = items.map(([n, c]) => `<span style="--c:var(${c})">${n}</span>`).join(""); }
+function chart(id, series, opts) { // series: [{xs, ys, color, dash}]
+  const cv = $(id), dpr = devicePixelRatio || 1, W = cv.clientWidth, H = cv.clientHeight; cv.width = W * dpr; cv.height = H * dpr;
+  const g = cv.getContext("2d"); g.scale(dpr, dpr); g.clearRect(0, 0, W, H);
+  const L = 46, R = 10, T = 8, B = 22, xs = series.flatMap(s => s.xs), xmax = Math.max(1, ...xs), xmin = opts.xmin ?? 0;
+  const ymax = Math.max(opts.ymin0 || 1, ...series.flatMap(s => s.ys)) * 1.1;
+  g.strokeStyle = css("--line"); g.fillStyle = css("--muted"); g.font = "11px system-ui"; g.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) { const y = T + (H - T - B) * (1 - i / 4); g.beginPath(); g.moveTo(L, y); g.lineTo(W - R, y); g.stroke(); g.textAlign = "right"; g.fillText((ymax * i / 4 >= 10 ? Math.round(ymax * i / 4) : (ymax * i / 4).toFixed(1)), L - 6, y + 4); }
+  g.textAlign = "center"; for (let i = 0; i <= 5; i++) g.fillText(Math.round(xmin + (xmax - xmin) * i / 5) + (opts.xl || " s"), L + (W - L - R) * i / 5, H - 6);
+  const X = x => L + (W - L - R) * (x - xmin) / Math.max(1e-9, xmax - xmin), Y = y => T + (H - T - B) * (1 - y / ymax);
+  for (const s of series) { g.strokeStyle = css(s.color); g.lineWidth = 2; g.setLineDash(s.dash || []); g.beginPath(); s.xs.forEach((x, i) => i ? g.lineTo(X(x), Y(s.ys[i])) : g.moveTo(X(x), Y(s.ys[i]))); g.stroke(); }
+  g.setLineDash([]);
+  if (opts.hline) { g.strokeStyle = css("--bad"); g.setLineDash([5, 4]); g.beginPath(); g.moveTo(L, Y(opts.hline)); g.lineTo(W - R, Y(opts.hline)); g.stroke(); g.setLineDash([]); }
+  for (const [t] of D.events) { g.strokeStyle = css("--c4"); g.globalAlpha = .5; g.beginPath(); g.moveTo(X(t), T); g.lineTo(X(t), H - B); g.stroke(); g.globalAlpha = 1; }
+}
+const col = i => rows.map(r => r[i]), t = col(0);
+function draw() {
+  chart("c1", [{ xs: t, ys: col(1), color: "--muted", dash: [6, 4] }, { xs: t, ys: col(2), color: "--c4" }, { xs: t, ys: col(3), color: "--c1" }], {});
+  chart("c2", [{ xs: t, ys: col(4), color: "--c1" }, { xs: t, ys: col(5), color: "--c3" }], {});
+  chart("c3", [{ xs: t, ys: col(7), color: "--c2" }, { xs: t, ys: col(8), color: "--c1" }, { xs: t, ys: col(9), color: "--c3" }], { hline: D.slo.p95 });
+  const byThreads = [...new Map(rows.filter(r => r[3] > 0).map(r => [r[3], r])).values()].sort((a, b) => a[3] - b[3]);
+  chart("c4", [{ xs: byThreads.map(r => r[3]), ys: byThreads.map(r => r[4]), color: "--c1" }, { xs: byThreads.map(r => r[3]), ys: byThreads.map(r => r[8]), color: "--c3" }], { xl: " thr" });
+}
+legend("lg1", [["planned", "--muted"], ["governor ceiling", "--c4"], ["running", "--c1"]]); legend("lg2", [["ops/s", "--c1"], ["errors/s", "--c3"]]);
+legend("lg3", [["p50 ms", "--c2"], ["p95 ms", "--c1"], ["p99 ms", "--c3"], ["p95 limit", "--bad"]]); legend("lg4", [["ops/s", "--c1"], ["p95 ms", "--c3"]]);
+$("events").innerHTML = "<tr><th>t (s)</th><th>event</th></tr>" + (D.events.length ? D.events.map(e => `<tr><td>${Math.round(e[0])}</td><td>${e[1].replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]))}</td></tr>`).join("") : "<tr><td colspan=2>none: the load never had to be reduced</td></tr>");
+const errs = Object.entries(S.topErrors);
+$("errors").innerHTML = errs.length ? "<tr><th>count</th><th>operation: message</th></tr>" + errs.map(([k, v]) => `<tr><td>${v}</td><td>${k.replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]))}</td></tr>`).join("") : "<tr><td>no errors</td></tr>";
+draw(); addEventListener("resize", draw);
+</script></main></body></html>
