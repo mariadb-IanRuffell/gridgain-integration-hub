@@ -20,16 +20,30 @@ import java.util.concurrent.CountDownLatch;
  */
 public final class LoadTest {
     static final Path STOP = Path.of("STOP");
+    static final Path LOCK = Path.of("RUNNING");
 
     public static void main(String[] a) throws Exception {
+        try {
+            dispatch(a);
+        } catch (IllegalStateException | IllegalArgumentException e) {
+            System.err.println("error: " + e.getMessage());
+            System.exit(1);
+        }
+    }
+
+    private static void dispatch(String[] a) throws Exception {
         String cmd = a.length > 0 ? a[0] : "help";
         switch (cmd) {
-            case "prepare" -> prepare(profile(a, 1));
+            case "prepare" -> {
+                RunLock.requireFree(LOCK, "prepare");
+                prepare(profile(a, 1));
+            }
             case "run" -> {
                 if (a.length < 2) usage();
                 System.exit(run(profile(a, 1)) ? 0 : 1);
             }
             case "cleanup" -> {
+                RunLock.requireFree(LOCK, "clean up");
                 try (Connection c = DriverManager.getConnection(Profile.load(null, Map.of()).jdbc)) {
                     Table.drop(c);
                 }
@@ -64,6 +78,12 @@ public final class LoadTest {
     }
 
     static boolean run(Profile p) throws Exception {
+        try (RunLock lock = RunLock.acquire(LOCK)) {
+            return runLocked(p);
+        }
+    }
+
+    private static boolean runLocked(Profile p) throws Exception {
         Files.deleteIfExists(STOP);
         String started = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
         Path dir = Path.of("results", LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss")) + "-" + p.name);

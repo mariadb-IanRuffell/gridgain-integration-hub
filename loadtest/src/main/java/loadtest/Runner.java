@@ -53,6 +53,7 @@ final class Runner {
     private final Map<String, LongAdder> errorKinds = new ConcurrentHashMap<>();
     private volatile boolean stop;
     private volatile boolean userStop;
+    private volatile String fatal;      // set by a worker when the test cannot continue at all (the table is gone)
 
     Runner(Profile p, PrintStream out, Path stopFile) {
         this.p = p;
@@ -129,6 +130,12 @@ final class Runner {
                 if (ending) break;
 
                 // guardrails
+                if (fatal != null) {
+                    r.abortReason = fatal;
+                    r.events.add(new Event(t, "ABORT: " + fatal));
+                    out.println("   >> ABORTING: " + fatal);
+                    break;
+                }
                 Governor.Decision d = gov.observe(ops, errs, p95, threads);
                 if (d.action() == Governor.Action.BACKOFF) {
                     r.backoffs++;
@@ -171,10 +178,12 @@ final class Runner {
             for (Thread w : workers) w.join(10_000);
             r.totalErrors = errors.sum();
             r.insertedRows = inserted.get();
-            try {
-                Table.removeInserted(control, p.rows);
-            } catch (SQLException e) {
-                out.println("warning: could not remove the inserted rows: " + e.getMessage());
+            if (fatal == null) {          // with the table gone there is nothing to clean up
+                try {
+                    Table.removeInserted(control, p.rows);
+                } catch (SQLException e) {
+                    out.println("warning: could not remove the inserted rows: " + e.getMessage());
+                }
             }
         }
         Map<String, Long> top = new java.util.LinkedHashMap<>();
@@ -243,6 +252,7 @@ final class Runner {
             } catch (SQLException | RuntimeException e) {
                 errors.increment();
                 String msg = String.valueOf(e.getMessage());
+                if (msg.toUpperCase().contains("TABLE \"" + Table.NAME.toUpperCase() + "\" NOT FOUND")) fatal = "test table " + Table.NAME + " no longer exists (dropped by someone else?)";
                 errorKinds.computeIfAbsent(op + ": " + msg.substring(0, Math.min(90, msg.length())).replace('\n', ' '), k -> new LongAdder()).increment();
                 try { if (c != null && !c.isValid(1)) { c.close(); c = null; } } catch (SQLException ignored) { c = null; }
                 sleep(c == null ? 500 : 20);      // do not hammer a cluster that is refusing connections

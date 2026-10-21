@@ -395,7 +395,7 @@ compares a MariaDB timestamp with the reader's clock, so it is approximate if th
 | `tests/python` | 38 | the four generators (`generate_seed.py`, `generate_cdc.py` for both sources): row counts, determinism, primary and foreign keys, money totals, seat and inventory consistency, one trigger per replicated table with the right keys, and that `hub/queries.sql` only uses tables and columns that exist in the GridGain schemas |
 | `cdc/src/test` | 36 | table specs and generated SQL, the MariaDB and Oracle table definitions checked against the GridGain DDL, key encoding, value normalisation used by `verify`, statement binding, and the stats publisher (`Metrics`) against a mocked connection |
 | `phase2/src/test` | 144 | the shared rules (seat numbers, miles, refund share, churn score and band, compensation share, service priority), the offer recommender, map/reduce of the tasks, the CLI argument parsing and the parity comparison rules |
-| `loadtest/src/test` | 41 | the load shape, the governor (back-off, recovery, abort), the latency histogram, the operation mix and key skew, profile clamping (including that the shipped profiles stay within the thread cap) and the report |
+| `loadtest/src/test` | 45 | the load shape, the governor (back-off, recovery, abort), the latency histogram, the operation mix and key skew, profile clamping (including that the shipped profiles stay within the thread cap) and the report |
 | `api/src/test` | 120 | every controller through MockMvc (validation, filters, error mapping to RFC 7807), the DTO constraints, `ComputeService` error mapping and argument building, the dashboard rate calculations, request metrics and the JDBC column reader |
 
 Not covered by unit tests: the SQL inside the repositories and the compute jobs' queries. Those need a real cluster and are checked by the parity harness (`phase2/run.sh parity all` and `parity oracle`), the API smoke test (`api/smoke-test.sh`) and `cdc/run.sh verify`.
@@ -412,6 +412,7 @@ from hurting the cluster**:
   current load (back off); after three healthy windows it rises again, a tenth of the peak at a time. Used threads = min(planned, ceiling).
 - **Abort**: the run stops and ramps to zero if a **server node drops out** (checked every window), if the health check itself fails three times, or if the
   error rate stays above 20% for three windows. It also refuses to start on a degraded cluster.
+- **One test at a time**: a `RUNNING` lock file holds the owner's process id; a second `run`, `prepare` or `cleanup` is refused while a test is active, and the run aborts at once if the table is dropped under it.
 - **Bounded growth**: inserts stop after `max_insert_rows` (they become reads) and everything inserted is deleted at the end. Query timeouts are 5 s, a refused
   connection is retried after 500 ms rather than hammered, and Ctrl-C or `./run.sh stop` ramps down cleanly and still writes the report.
 
