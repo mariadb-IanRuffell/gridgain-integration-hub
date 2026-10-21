@@ -39,7 +39,7 @@ public class BookingController {
     }
 
     @GetMapping
-    @Operation(summary = "List bookings", description = "Newest first. customerId is the Sybase customer id. Segments are only included by GET /bookings/{id}.")
+    @Operation(summary = "List bookings", description = "Newest first. customerId is the MariaDB customer id. Segments are only included by GET /bookings/{id}.")
     Page<Booking> list(@RequestParam(required = false) Integer customerId,
                        @RequestParam(required = false) BookingStatus status,
                        @RequestParam(required = false) Integer flightId,

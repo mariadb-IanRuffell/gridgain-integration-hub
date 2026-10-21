@@ -4,6 +4,6 @@ WORKDIR /app
 COPY target/classes classes
 COPY target/lib lib
 COPY jvm.args jvm.args
-# jvm.args carries -Duser.timezone=UTC (Sybase datetimes are treated as UTC) and the GridGain add-opens flags
+# jvm.args carries -Duser.timezone=UTC (source datetimes are treated as UTC) and the GridGain add-opens flags
 ENTRYPOINT ["java", "@jvm.args", "-cp", "classes:lib/*", "cdc.Main"]
 CMD ["run"]

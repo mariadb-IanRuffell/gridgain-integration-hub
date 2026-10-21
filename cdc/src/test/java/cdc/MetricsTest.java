@@ -121,9 +121,10 @@ class MetricsTest {
         Metrics m = new Metrics(src);
         m.ensureTables();
         ArgumentCaptor<String> ddl = ArgumentCaptor.forClass(String.class);
-        verify(st, times(2)).execute(ddl.capture());
+        verify(st, times(3)).execute(ddl.capture());
         assertTrue(ddl.getAllValues().get(0).contains("cdc_status"));
         assertTrue(ddl.getAllValues().get(1).contains("cdc_table_counts"));
+        assertTrue(ddl.getAllValues().get(2).contains("ADD COLUMN IF NOT EXISTS source_rows"));   // upgrades a table made by an older reader
         verify(sel).setString(1, "oracle");
 
         m.record(new Result(1, 1, 0, 1, 0, 1));   // continues from the restored totals

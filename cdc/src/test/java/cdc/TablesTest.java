@@ -22,7 +22,7 @@ class TablesTest {
 
     @Test
     void columnsMatchTheGridGainDdl() throws IOException {
-        Ddl ddl = Ddl.load("/gridgain-schema-sybase.sql");
+        Ddl ddl = Ddl.load("/gridgain-schema-mariadb.sql");
         assertEquals(Tables.BY_NAME.keySet(), ddl.columns.keySet());
         for (TableSpec t : Tables.ALL) {
             assertEquals(new HashSet<>(t.columns), ddl.columns.get(t.name), t.name);
@@ -32,7 +32,7 @@ class TablesTest {
 
     @Test
     void customerOwnedTablesAreColocatedOnCustomerId() throws IOException {
-        Ddl ddl = Ddl.load("/gridgain-schema-sybase.sql");
+        Ddl ddl = Ddl.load("/gridgain-schema-mariadb.sql");
         for (String t : Set.of("address", "orders", "order_item", "payment", "interaction", "loyalty_txn")) {
             assertTrue(ddl.options.get(t).contains("affinity_key=customer_id"), t);
             assertTrue(ddl.columns.get(t).contains("customer_id"), t);

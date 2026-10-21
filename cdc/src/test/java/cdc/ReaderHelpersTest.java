@@ -14,7 +14,7 @@ import org.junit.jupiter.api.Test;
 class ReaderHelpersTest {
     @Test
     void normTreatsNullDecimalsAndPaddingConsistently() {
-        for (java.util.function.Function<Object, String> norm : java.util.List.<java.util.function.Function<Object, String>>of(SybaseCdc::norm, OracleCdc::norm)) {
+        for (java.util.function.Function<Object, String> norm : java.util.List.<java.util.function.Function<Object, String>>of(MariaDbCdc::norm, OracleCdc::norm)) {
             assertEquals("~", norm.apply(null));
             assertEquals("0", norm.apply(new BigDecimal("0.00")));
             assertEquals("12.5", norm.apply(new BigDecimal("12.500")));
@@ -30,33 +30,33 @@ class ReaderHelpersTest {
     @Test
     void stripCommentsRemovesWholeLineCommentsOnly() {
         String in = "-- header\nCREATE TABLE a (x INT); -- trailing stays\n   -- indented\nSELECT 1;";
-        assertEquals("CREATE TABLE a (x INT); -- trailing stays\nSELECT 1;", SybaseCdc.stripComments(in));
-        assertEquals(OracleCdc.stripComments(in), SybaseCdc.stripComments(in));
+        assertEquals("CREATE TABLE a (x INT); -- trailing stays\nSELECT 1;", MariaDbCdc.stripComments(in));
+        assertEquals(OracleCdc.stripComments(in), MariaDbCdc.stripComments(in));
     }
 
     @Test
     void schemaResourcesAreOnTheClasspath() throws Exception {
-        assertTrue(SybaseCdc.readResource("/gridgain-schema-sybase.sql").contains("CREATE TABLE IF NOT EXISTS customer"));
+        assertTrue(MariaDbCdc.readResource("/gridgain-schema-mariadb.sql").contains("CREATE TABLE IF NOT EXISTS customer"));
         assertTrue(OracleCdc.readResource("/gridgain-schema-oracle.sql").contains("CREATE TABLE IF NOT EXISTS flight_inventory"));
     }
 
     @Test
-    void sybaseBindCopiesPositionalColumns() throws Exception {
+    void mariadbBindCopiesPositionalColumns() throws Exception {
         ResultSet rs = mock(ResultSet.class);
         PreparedStatement ps = mock(PreparedStatement.class);
         when(rs.getObject(1)).thenReturn(7);
         when(rs.getObject(2)).thenReturn("x");
-        SybaseCdc.bind(ps, rs, 2);
+        MariaDbCdc.bind(ps, rs, 2);
         verify(ps).setObject(1, 7);
         verify(ps).setObject(2, "x");
         verifyNoMoreInteractions(ps);
     }
 
     @Test
-    void sybasePkBindingFollowsTheKeyType() throws Exception {
+    void mariadbPkBindingFollowsTheKeyType() throws Exception {
         PreparedStatement ps = mock(PreparedStatement.class);
-        SybaseCdc.setPk(ps, 1, Tables.BY_NAME.get("customer"), "42");
-        SybaseCdc.setPk(ps, 2, Tables.BY_NAME.get("loyalty_tier_rule"), "GOLD");
+        MariaDbCdc.setPk(ps, 1, Tables.BY_NAME.get("customer"), "42");
+        MariaDbCdc.setPk(ps, 2, Tables.BY_NAME.get("loyalty_tier_rule"), "GOLD");
         verify(ps).setInt(1, 42);
         verify(ps).setString(2, "GOLD");
     }

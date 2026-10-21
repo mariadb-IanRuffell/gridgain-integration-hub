@@ -1,71 +1,80 @@
-# Sybase + Oracle → GridGain: phased migration PoC (data hub)
+# MariaDB + Oracle → GridGain: phased migration PoC (data hub)
 
 Two source systems with deliberately **different, complementary data** are moved onto one GridGain 8.9 cluster in the same
 two phases, and joined there:
 
 | System | Domain | Data | Join key |
 |---|---|---|---|
-| **Sybase ASE** (on `llama`) | CRM / commerce: "customer 360" | customers, addresses, products, orders, payments, loyalty, interactions | `customer_id` |
-| **Oracle 26ai Free** (local Docker) | travel / reservations | airports, flights, seat inventory, bookings, segments, flight events, compensation | `booking.customer_id` = the Sybase customer id |
+| **MariaDB 11.4** (local Docker) | CRM / commerce: "customer 360" | customers, addresses, products, orders, payments, loyalty, interactions | `customer_id` |
+| **Oracle 26ai Free** (local Docker) | travel / reservations | airports, flights, seat inventory, bookings, segments, flight events, compensation | `booking.customer_id` = the MariaDB customer id |
 
 ```
-Sybase ASE ──triggers──► change log ──► CDC reader ─┐                          ┌─► compute jobs (the former stored procedures)
+MariaDB ────triggers──► change log ──► CDC reader ─┐                          ┌─► compute jobs (the former stored procedures)
                                                     ├─► GridGain 3-node cluster ┼─► REST API (CRUD + operations + hub) + live dashboard
 Oracle ─────triggers──► change log ──► CDC reader ─┘   (native persistence)    └─► cross-source SQL joins (hub/queries.sql)
 ```
 
 | Phase | Goal | Status |
 |-------|------|--------|
-| 1 | CDC from each source into GridGain (the sources stay systems of record) | **done** for Sybase and Oracle |
-| 2 | Re-implement each source's stored procedures as GridGain compute jobs; apps call GridGain | **done** for Sybase and Oracle (plus a REST API in front of both, and hub jobs that join them) |
+| 1 | CDC from each source into GridGain (the sources stay systems of record) | **done** for MariaDB and Oracle |
+| 2 | Re-implement each source's stored procedures as GridGain compute jobs; apps call GridGain | **done** for MariaDB and Oracle (plus a REST API in front of both, and hub jobs that join them) |
 
-There is no third phase: decommissioning is just switching Sybase and the CDC reader off. That needs the applications to stop writing in Sybase and GridGain to be the only durable copy; see "Before switching Sybase off" below.
+There is no third phase: decommissioning is just switching MariaDB and the CDC reader off. That needs the applications to stop writing in MariaDB and GridGain to be the only durable copy; see "Before switching MariaDB off" below.
 
-## Source system (done): `sybase/`
+> This branch (`mariadb-replaces-sybase`) swaps the original source system, SAP/Sybase ASE, for MariaDB. ASE 16 could not run on a Mac (it needed a Linux VM on another machine); MariaDB runs natively in Docker next to everything else. The schema, data, six procedures, CDC design and parity results carry over; `main` still has the Sybase version.
 
-Customer 360 schema on SAP ASE 16.0 (`testdb`), running on `llama.local:5000` (see below).
+## Source system (done): `mariadb/`
+
+Customer 360 schema on MariaDB 11.4 (InnoDB, database `crm`), running in the `mariadb` container on this Mac (native arm64; login `crm`/`crm`, port 3306).
 
 ```
-sybase/
+mariadb/
+  docker-compose.yml     the container, on the gridgain_default network (reachable as mariadb:3306)
   sql/01_schema.sql      10 tables: customer, address, product, orders, order_item, payment,
                          interaction, loyalty_txn, customer_score, loyalty_tier_rule
   sql/02_seed.sql        generated: 250 customers, ~1.4k orders, ~2.3k items, ~350 interactions
-  sql/03_procs.sql       6 stored procedures (below)
+  sql/03_procs.sql       6 stored procedures (below); errors are SIGNALs with the same numbers (20002, 20003, ...)
+  sql/04_cdc.sql         generated: change log, offset table and 30 row triggers (see Phase 1)
   sql/99_smoke_test.sql  exercises every proc (mutates data; run deploy.sh to reset)
   generate_seed.py       deterministic generator for 02_seed.sql (seed=42)
+  generate_cdc.py        generator for 04_cdc.sql
   deploy.sh              rebuild everything:  ./deploy.sh
-  isql.sh                ad-hoc SQL:          ./isql.sh "select count(*) from customer"
+  sql.sh                 ad-hoc SQL:          ./sql.sh "select count(*) from customer"     (-f file, -b "BEGIN NOT ATOMIC ... END")
+  gen-load.sh            order / touch load generator
 ```
 
 ### Stored procedures and what each demonstrates for the compute-job migration
 
 | Procedure | Pattern | Likely GridGain shape |
 |-----------|---------|-----------------------|
-| `sp_customer_360(@customer_id)` | 6 result sets joining 6 tables | colocated compute job on `customer_id` affinity key |
+| `sp_customer_360(p_customer_id)` | 6 result sets joining 6 tables | colocated compute job on `customer_id` affinity key |
 | `sp_recalc_loyalty_tier` | aggregate + reference-data lookup + conditional update | job; `loyalty_tier_rule` as a replicated cache |
 | `sp_create_order` / `sp_add_order_item` / `sp_complete_order` | multi-statement transactions, stock check, proc-to-proc call, error codes | transactional job (or three) with colocated orders/items/payment |
-| `sp_score_customers(@as_of, @customer_id)` | cursor over all customers, per-row queries, upsert | broadcast/map-reduce job, one partition per node |
+| `sp_score_customers(p_as_of, p_customer_id)` | cursor over all customers, per-row queries, upsert | broadcast/map-reduce job, one partition per node |
 
 ## Phase 1 (done): trigger-based CDC into GridGain 8.9.38
 
 ```
-Sybase ASE --triggers--> cdc_change_log --poll--> cdc/ (Java) --MERGE/DELETE--> GridGain (thin JDBC)
+MariaDB --triggers--> cdc_change_log --poll--> cdc/ (Java) --MERGE/DELETE--> GridGain (thin JDBC)
 ```
 
-- **Sybase side** (`sybase/sql/04_cdc.sql`, generated by `generate_cdc.py`): `cdc_change_log`
-  (table, op I/U/D, pk), `cdc_offset` (consumer checkpoint), and one trigger per table.
-  Triggers log only the key, so the log stays narrow and the sources need no schema change.
+- **MariaDB side** (`mariadb/sql/04_cdc.sql`, generated by `generate_cdc.py`): `cdc_change_log`
+  (table, op I/U/D, pk), `cdc_offset` (consumer checkpoint), `cdc_seq` (a one-row counter) and three row triggers per table
+  (insert, update, delete: 30 in all) that call `cdc_log`. Triggers log only the key, so the log stays narrow and the source needs no
+  schema change. **Ordering:** InnoDB readers never wait for uncommitted rows, so plain `AUTO_INCREMENT` ids would let a late-committing
+  transaction be skipped. Each trigger therefore takes its id from the counter row (`UPDATE cdc_seq SET v = v + 1`), whose lock is held until the
+  writer commits: ids are gapless and in commit order (a rollback hands the id back), and the reader can poll `change_id > last` safely.
 - **Reader** (`cdc/`): batches log rows, collapses them to distinct keys, re-reads the *current* row from
-  Sybase and MERGEs it into GridGain (or DELETEs if the row is gone). Because it applies state rather than
+  MariaDB and MERGEs it into GridGain (or DELETEs if the row is gone). Because it applies state rather than
   operations, replays are harmless; the offset is committed only after GridGain has the data.
 - **GridGain** (3-node persistent cluster, see "GridGain cluster" below; image `gridgain/community:8.9.38`, native arm64):
-  tables from `cdc/src/main/resources/gridgain-schema-sybase.sql`. Customer-owned tables are colocated on
+  tables from `cdc/src/main/resources/gridgain-schema-mariadb.sql`. Customer-owned tables are colocated on
   `customer_id`; `order_item`/`payment` carry a denormalised `customer_id` (resolved through `orders`);
   `product` and `loyalty_tier_rule` are replicated. This is the layout Phase 2 compute jobs will use.
 
 ```bash
 cd gridgain && ./cluster.sh up               # 3-node persistent GridGain on :10800/10801/10802
-cd ../sybase && ./deploy.sh                  # (re)build Sybase schema, seed, procs, CDC triggers
+cd ../mariadb && ./deploy.sh                 # start MariaDB, (re)build schema, seed, procs, CDC triggers
 cd ../cdc
 ./run.sh init      # create GridGain tables, snapshot copy, set offset to the pre-copy watermark
 ./run.sh run       # stream continuously from the host (CDC_POLL_MS, CDC_BATCH env vars); normally the
@@ -80,11 +89,11 @@ Verified: after `init` all 10 tables are row-for-row identical; live changes fro
 changes made while the reader was stopped are applied on restart.
 
 **Known limits (PoC):**
-- Ordering relies on ASE blocking readers behind uncommitted log rows (default locking), so a long open
-  transaction delays CDC rather than being skipped. Large production use would want datarows locking and a
-  commit-aware cursor, or a log-based tool.
+- Change ids come from a locked counter row, so all writing transactions in MariaDB serialise on it at the point of their first write, and two
+  transactions that touch the same rows in a different order can deadlock (InnoDB rolls one back; the load generator counts that order as
+  cancelled). Fine for this PoC; a log-based reader (the MariaDB binlog, for example with Debezium) avoids both for high write rates.
 - Deletes from GridGain use `WHERE pk = ?` (a scan for composite-key tables); fine at this size.
-- Sybase datetimes are treated as UTC; the reader JVM runs with `-Duser.timezone=UTC` to match the
+- MariaDB runs in UTC and its datetimes are treated as UTC; the reader JVM runs with `-Duser.timezone=UTC` to match the
   GridGain node. Without it, summer-time rows were off by one hour (caught by `verify`).
 - Writes to GridGain are not transactional across tables, so readers may briefly see a partial batch.
 - `cdc_change_log` is never purged; add a retention job before running this for long.
@@ -94,7 +103,7 @@ changes made while the reader was stopped are applied on restart.
 All six procedures now exist as Java `ComputeTask`s in `phase2/`, deployed on the GridGain node and called
 by name through the thin client (no cluster membership needed from the caller).
 
-| Sybase procedure | GridGain job | How it changed |
+| MariaDB procedure | GridGain job | How it changed |
 |---|---|---|
 | `sp_customer_360` | `Customer360Task` | Runs on the node owning the customer's partition; same 6 result sets |
 | `sp_recalc_loyalty_tier` | `RecalcLoyaltyTierTask` | Same logic; tier rules read from the replicated `loyalty_tier_rule` |
@@ -108,16 +117,16 @@ cd phase2
 ./run.sh recalc 2
 ./run.sh score                        # score every customer (writes customer_score)
 ./run.sh order 4 APP CARD 4:2,17:1    # customer, channel, payment method, product:qty,...
-./run.sh parity all                   # run Sybase procs and GridGain jobs side by side and compare
+./run.sh parity all                   # run MariaDB procs and GridGain jobs side by side and compare
 ```
 
 **Parity results** (`./run.sh parity all`, 16 checks, passing on one node, on 2 nodes, and on the 3-node persistent cluster):
-every customer x all 6 result sets of `sp_customer_360` (251 customers); the tier returned and stored for
-every customer; `customer_score` identical for all 241 active customers (score, band, timestamp); the same
+every customer x all 6 result sets of `sp_customer_360` (250 customers); the tier returned and stored for
+every customer; `customer_score` identical for all 240 active customers (score, band, timestamp); the same
 error number for unknown customer / zero quantity / unknown product / insufficient stock / empty order
 (and failed orders leave stock untouched); and a full order (total, line items, payment, points, tier
 SILVER->GOLD, customer points, product stock). A negative control (one value changed in GridGain) is caught.
-On 3 nodes the scoring job split 85 + 76 + 80 = 241 customers, each scored exactly once by its owner.
+On 3 nodes the scoring job split the three nodes' shares summing to 240 customers, each scored exactly once by its owner.
 
 **How deployment works:** `gridgain/config/node.xml` enables thin-client compute (off by default),
 `gridgain/deploy/gg-compute.jar` is mounted into `libs/external` (on each node's classpath). A node loads job
@@ -125,19 +134,19 @@ classes at start, so `redeploy.sh` does a rolling restart (one node at a time, c
 The image runs Java 11, so the module compiles at `--release 11`. All GridGain tables are `TRANSACTIONAL`
 with explicit key/value type names so jobs can update several of them atomically.
 
-**Behavioural differences from the T-SQL (deliberate):**
+**Behavioural differences from the SQL procedures (deliberate):**
 - `PlaceOrderTask` is all-or-nothing. If item 2 is out of stock, nothing changes; the stored procedures
   left a NEW order with item 1 already decremented.
 - Ids for rows created in GridGain come from sequences starting at 1,000,000,000 so they can never
-  collide with Sybase identity values that CDC still replicates.
-- `ScoreCustomersTask` reproduces ASE's `datediff(dd, ...)` (calendar-day boundaries, not elapsed 24h) and
-  integer `avg()`; those two details are easy to get subtly wrong when porting.
+  collide with MariaDB auto-increment values that CDC still replicates.
+- `ScoreCustomersTask` reproduces MariaDB's `DATEDIFF` (calendar-day boundaries, not elapsed 24h) and
+  the integer average; those two details are easy to get subtly wrong when porting. (`sp_complete_order` truncates points with `FLOOR`: a `CAST` would round.)
 
-**Before switching Sybase off:** CDC is one-way, Sybase -> GridGain. Rows written by the jobs
+**Before switching MariaDB off:** CDC is one-way, MariaDB -> GridGain. Rows written by the jobs
 (orders, points, stock) exist only in GridGain, so `cdc verify` will show differences once the jobs write,
-and a later Sybase change to the same customer would overwrite GridGain's copy. A real cutover therefore
-needs the applications to stop writing those entities in Sybase, and GridGain to be the only durable copy (it already has
-native persistence). Once that is true, Sybase and the CDC reader are simply decommissioned.
+and a later MariaDB change to the same customer would overwrite GridGain's copy. A real cutover therefore
+needs the applications to stop writing those entities in MariaDB, and GridGain to be the only durable copy (it already has
+native persistence). Once that is true, MariaDB and the CDC reader are simply decommissioned.
 After running `parity order` (which writes to both sides) resync with `cdc/run.sh init` (this drops and
 recreates the GridGain tables).
 
@@ -147,8 +156,8 @@ matching job change.
 
 ## Second source: Oracle travel system (`oracle/`)
 
-An airline-style reservations system on Oracle Database 26ai Free, chosen so its data **complements** the Sybase CRM data instead of
-duplicating it. Bookings reference the Sybase `customer_id`; there is no foreign key (different system), so only the GridGain hub can join them.
+An airline-style reservations system on Oracle Database 26ai Free, chosen so its data **complements** the MariaDB CRM data instead of
+duplicating it. Bookings reference the MariaDB `customer_id`; there is no foreign key (different system), so only the GridGain hub can join them.
 
 ```bash
 cd oracle && ./deploy.sh              # start Oracle (Docker, native arm64), build schema + seed + PL/SQL + CDC triggers
@@ -156,7 +165,7 @@ cd oracle && ./deploy.sh              # start Oracle (Docker, native arm64), bui
 ./gen-load.sh 60 5                    # ~5 real bookings/s for 60 s (about 8% cancelled again), see the dashboard move
 ```
 
-Unlike Sybase, **Oracle runs locally on your Mac** (`gvenzl/oracle-free:23-slim-faststart`, login `travel`/`travel`, service `FREEPDB1`,
+Like MariaDB, **Oracle runs locally on your Mac** (`gvenzl/oracle-free:23-slim-faststart`, login `travel`/`travel`, service `FREEPDB1`,
 port 1521, on the cluster's Docker network as `oracle`).
 
 | Table | Rows | Notes |
@@ -164,7 +173,7 @@ port 1521, on the cluster's Docker network as `oracle`).
 | `airport` | 18 | reference |
 | `flight` | 238 | spokes to/from a hub, -45 d to +60 d; 8 delayed and 3 cancelled in the future, some arrived late |
 | `flight_inventory` | 714 | per flight and cabin: seats, available, `next_seat` (never decremented, so seat numbers stay unique), base fare |
-| `booking`, `booking_segment` | 650 / 953 | customers 1-250 (the Sybase ids), 1-3 segments, ~5% cancelled |
+| `booking`, `booking_segment` | 650 / 953 | customers 1-250 (the MariaDB ids), 1-3 segments, ~5% cancelled |
 | `flight_event`, `compensation` | 28 / 0 | `compensation` is the output of `sp_process_disruptions` |
 
 **PL/SQL procedures (the migration candidates)** and the error numbers they raise (`RAISE_APPLICATION_ERROR`):
@@ -179,9 +188,9 @@ port 1521, on the cluster's Docker network as `oracle`).
 
 ### CDC from Oracle (Phase 1)
 
-Same idea as Sybase (row triggers write `(table, op, pk)` to `cdc_change_log`; the reader re-reads the current row and MERGEs it into
-GridGain, or DELETEs it), but **the visibility problem is different and so is the fix**. Sybase blocks readers behind uncommitted rows;
-Oracle never does, so polling `change_id > last` would silently skip a change whose transaction commits late. The log table is created
+Same idea as MariaDB (row triggers write `(table, op, pk)` to `cdc_change_log`; the reader re-reads the current row and MERGEs it into
+GridGain, or DELETEs it), but **the visibility problem is different and so is the fix**. MariaDB gets away with polling because its trigger ids are commit-ordered (a locked counter, see above);
+Oracle readers never wait for uncommitted rows and there is no such counter here, so polling `change_id > last` would silently skip a change whose transaction commits late. The log table is created
 with `ROWDEPENDENCIES` so each row carries its own **commit SCN** (`ORA_ROWSCN`); each poll takes a snapshot SCN
 (`DBMS_FLASHBACK.GET_SYSTEM_CHANGE_NUMBER`) and reads exactly the rows committed in `(last_scn, snapshot]`. Verified with two sessions:
 the one that inserted first but committed later has the higher SCN and lands in a later window instead of being lost.
@@ -194,7 +203,7 @@ CDC_SOURCE=oracle ./run.sh verify    # every column of every row compared with O
 ```
 
 GridGain tables (`cdc/src/main/resources/gridgain-schema-oracle.sql`): `booking`, `booking_segment`, `compensation` are partitioned and
-**colocated on `customer_id`, exactly like the Sybase customer data** (segments and compensation carry a denormalised `customer_id`);
+**colocated on `customer_id`, exactly like the MariaDB customer data** (segments and compensation carry a denormalised `customer_id`);
 `airport`, `flight`, `flight_inventory`, `flight_event` are replicated. All TRANSACTIONAL.
 
 ### Compute jobs (Phase 2)
@@ -225,18 +234,18 @@ test booking each system created apart from its id.
 Because customer-owned data from **both** sources is colocated on `customer_id`, queries and jobs that join them run on one node with no
 data movement. These have no equivalent in either source system:
 
-- **SQL** ([hub/queries.sql](hub/queries.sql), `hub/run.sh` runs them all, or open the file in DBeaver): lifetime value (retail from Sybase + travel
+- **SQL** ([hub/queries.sql](hub/queries.sql), `hub/run.sh` runs them all, or open the file in DBeaver): lifetime value (retail from MariaDB + travel
   from Oracle), spend by loyalty tier, **proactive service** (customers with a negative interaction booked on a delayed or cancelled flight),
   top routes for GOLD/PLATINUM customers, a cross-sell list (big retail spenders who never booked a flight), compensation cost by tier. Each runs in 3-30 ms.
-- **`CustomerHubTask`** (`GET /api/v1/customers/{id}/hub`): profile, tier and orders (Sybase) with bookings, miles, upcoming and at-risk trips
+- **`CustomerHubTask`** (`GET /api/v1/customers/{id}/hub`): profile, tier and orders (MariaDB) with bookings, miles, upcoming and at-risk trips
   (Oracle), and `lifetime_value = retail spend + travel spend`. Cross-checked against both source databases (e.g. customer 8: 18 orders / 87,550 and
   24 bookings / 66,455 / 174,815 miles).
 - **`DisruptionImpactTask`** (`GET /api/v1/flights/{id}/impact`): the passengers of a delayed or cancelled flight, ranked by tier, cabin and retail
-  spend, each with the base compensation and a tier-weighted suggested amount (Sybase's loyalty multiplier x Oracle's fare).
+  spend, each with the base compensation and a tier-weighted suggested amount (MariaDB's loyalty multiplier x Oracle's fare).
 
 ### Offers from buying behaviour: an in-cluster recommender (`RecommendOffersTask`)
 
-A job that generates personalised offers for every customer, using what they bought (Sybase), their churn risk (the scoring job) and their next
+A job that generates personalised offers for every customer, using what they bought (MariaDB), their churn risk (the scoring job) and their next
 flight (Oracle). It is a statistical recommender, not an LLM: it runs entirely on the cluster nodes and no customer data leaves them.
 
 - **Where it runs**: one job per node, only for the customers that node owns. Purchase history, churn band and next flight are read with local
@@ -284,9 +293,9 @@ cd gridgain
 
 **Verified:** hard-killing a node loses nothing (`cdc verify` identical, parity jobs keep working, scoring
 re-partitions across the 2 survivors); the node rejoins under its pinned id; a full stop and start of all
-three nodes restores every row with no reload from Sybase; rolling redeploy of the job jar works; CDC
+three nodes restores every row with no reload from MariaDB; rolling redeploy of the job jar works; CDC
 applies changes to the cluster. Because the data is now durable, `cdc init` is only needed for the first
-load or to deliberately reset GridGain to Sybase's state.
+load or to deliberately reset GridGain to MariaDB's state.
 
 ## REST API (done): `api/`
 
@@ -317,7 +326,7 @@ cd ../api && ./build.sh               # mvn package + docker compose up --build;
 | Airports | `GET /airports[/{iata}]` (Oracle reference data) |
 | Flights | `GET/POST /flights`, `GET/PUT/DELETE /flights/{id}` (with seat inventory), `GET /flights/{id}/events`, `POST /flights/{id}/delay`, `POST /flights/{id}/cancel` |
 | Bookings | `GET /bookings`, `GET /bookings/{id}`, **`POST /bookings`** = book-flight job, **`POST /bookings/{id}/cancel`** = cancel-booking job |
-| Hub | `GET /customers/{id}/trips`, **`GET /customers/{id}/hub`** and **`GET /flights/{id}/impact`** (join Oracle x Sybase), `POST /disruptions/process`, `GET /compensation` |
+| Hub | `GET /customers/{id}/trips`, **`GET /customers/{id}/hub`** and **`GET /flights/{id}/impact`** (join Oracle x MariaDB), `POST /disruptions/process`, `GET /compensation` |
 
 **Design notes**
 - CRUD runs as SQL over the GridGain thin JDBC driver (all three nodes in the URL, so it fails over).
@@ -332,18 +341,18 @@ cd ../api && ./build.sh               # mvn package + docker compose up --build;
   (409): set status INACTIVE or active=false.
 - `PUT` replaces all editable fields (omitted optional fields reset to defaults). Loyalty tier and points are
   never writable directly.
-- New ids come from GridGain atomic sequences starting at 1,000,000,000 (no collision with Sybase identities).
+- New ids come from GridGain atomic sequences starting at 1,000,000,000 (no collision with MariaDB identities).
 - The container runs with `-Duser.timezone=UTC` like the CDC reader and the nodes.
 
 **Limits (PoC):** no authentication; SQL DML is per statement, so cascading customer delete is not atomic;
 rows written through the API exist only in GridGain (CDC is one-way), so `cdc verify` shows them as extras
-until Sybase is switched off and GridGain is the only copy. `./smoke-test.sh` leaves a few rows behind (including a flight with bookings and compensation rows for the seeded disruptions); `CDC_SOURCE=oracle ./run.sh init` and `./run.sh init` reset GridGain to each source.
+until MariaDB is switched off and GridGain is the only copy. `./smoke-test.sh` leaves a few rows behind (including a flight with bookings and compensation rows for the seeded disruptions); `CDC_SOURCE=oracle ./run.sh init` and `./run.sh init` reset GridGain to each source.
 Verified: the smoke suite (77 checks at the time, before the travel endpoints) also passed with `gridgain1` (the first address, and coordinator) killed.
 
 ### CDC readers as services
 
 Both readers run as containers from one image (`cdc/Dockerfile`, `cdc/docker-compose.yml`), joined to the GridGain network and restarted
-automatically: `gg-cdc` (`CDC_SOURCE=sybase`, reaches Sybase by IP `192.168.68.73` because `.local` names do not resolve inside containers)
+automatically: `gg-cdc` (`CDC_SOURCE=mariadb`, reaches `mariadb:3306`)
 and `gg-cdc-oracle` (`CDC_SOURCE=oracle`, reaches `oracle:1521`). Never also run `./run.sh run` on the host for the same source.
 
 ```bash
@@ -358,24 +367,24 @@ those. `run.sh init` does not touch them.
 
 `http://localhost:8080/` (also `/dashboard.html`) is served by the API container, no external libraries. It shows:
 
-- **Table sizes**: all 18 tables (17 replicated plus the GridGain-only `customer_offer`), colour-coded by source system, GridGain rows next to the rows last counted in Sybase or Oracle by the
+- **Table sizes**: all 18 tables (17 replicated plus the GridGain-only `customer_offer`), colour-coded by source system, GridGain rows next to the rows last counted in MariaDB or Oracle by the
   CDC reader, with a delta. A positive delta means GridGain holds rows the source does not (rows created through the REST API or compute jobs,
   or the leftovers of `smoke-test.sh`), or the source count is a few seconds behind during a burst.
-- **Live graphs** (last 1/5/15 minutes, 2-second samples): CDC events/s, backlog and latency for **Sybase and Oracle side by side**, REST requests/s
+- **Live graphs** (last 1/5/15 minutes, 2-second samples): CDC events/s, backlog and latency for **MariaDB and Oracle side by side**, REST requests/s
   (reads, writes), REST average latency and errors/s. Hover for exact values.
 - **Status pills** for GridGain nodes online, each CDC reader running/stopped (heartbeat older than ~10 s = stopped), API uptime.
 - A **REST read-traffic generator** (dropdown, runs in the browser) to see the REST graphs move.
-  To see the CDC graphs move, change data in Sybase with `sybase/gen-load.sh`:
+  To see the CDC graphs move, change data in MariaDB with `mariadb/gen-load.sh`:
   `./gen-load.sh 60 100` touches ~100 customer rows/s for 60 s (only `updated_at` changes), and
   `./gen-load.sh --orders 60 5` places ~5 new orders/s through the stored procedures (about 11 CDC events per
-  order: orders, items, payment, points ledger, customer, stock). Orders are real Sybase data; `sybase/deploy.sh` resets it.
+  order: orders, items, payment, points ledger, customer, stock). Orders are real MariaDB data; `mariadb/deploy.sh` resets it.
   `oracle/gen-load.sh 60 5` books ~5 flights/s in Oracle (about 8% cancelled again); `oracle/deploy.sh` resets it.
 
 How it works: the API counts its own business requests in a servlet filter (the dashboard's polling under
 `/api/v1/dashboard` is excluded), a scheduled sampler turns those and the CDC counters into per-second rates, and the
 data is served by `GET /api/v1/dashboard/summary` and `/series?since=`. CDC rates (per reader) use the reader's publish
 timestamps as the time base (using the sampler's clock aliased 65/130 events/s for a steady 100/s). The latency graph
-compares a Sybase timestamp with the reader's clock, so it is approximate if the two clocks differ.
+compares a MariaDB timestamp with the reader's clock, so it is approximate if the two clocks differ.
 
 ## Unit tests
 
@@ -383,8 +392,8 @@ compares a Sybase timestamp with the reader's clock, so it is approximate if the
 
 | Suite | Tests | What it covers |
 |---|---|---|
-| `tests/python` | 36 | the four generators (`generate_seed.py`, `generate_cdc.py` for both sources): row counts, determinism, primary and foreign keys, money totals, seat and inventory consistency, one trigger per replicated table with the right keys, and that `hub/queries.sql` only uses tables and columns that exist in the GridGain schemas |
-| `cdc/src/test` | 36 | table specs and generated SQL, the Sybase and Oracle table definitions checked against the GridGain DDL, key encoding, value normalisation used by `verify`, statement binding, and the stats publisher (`Metrics`) against a mocked connection |
+| `tests/python` | 38 | the four generators (`generate_seed.py`, `generate_cdc.py` for both sources): row counts, determinism, primary and foreign keys, money totals, seat and inventory consistency, one trigger per replicated table with the right keys, and that `hub/queries.sql` only uses tables and columns that exist in the GridGain schemas |
+| `cdc/src/test` | 36 | table specs and generated SQL, the MariaDB and Oracle table definitions checked against the GridGain DDL, key encoding, value normalisation used by `verify`, statement binding, and the stats publisher (`Metrics`) against a mocked connection |
 | `phase2/src/test` | 144 | the shared rules (seat numbers, miles, refund share, churn score and band, compensation share, service priority), the offer recommender, map/reduce of the tasks, the CLI argument parsing and the parity comparison rules |
 | `api/src/test` | 120 | every controller through MockMvc (validation, filters, error mapping to RFC 7807), the DTO constraints, `ComputeService` error mapping and argument building, the dashboard rate calculations, request metrics and the JDBC column reader |
 
@@ -392,35 +401,27 @@ Not covered by unit tests: the SQL inside the repositories and the compute jobs'
 
 ## Environment
 
-Oracle runs in the `oracle` container on this Mac (see "Second source" above); GridGain, the API and both CDC readers are Docker containers on the
-`gridgain_default` network. Sybase is the only remote piece:
-
-ASE runs in the `datagrip/sybase` image inside an Ubuntu 20.04 VM (kernel 5.4) on `llama.local`
-(QEMU/KVM in container `sybvm`, files in `~/sybase-vm`). It must be a VM: the 2015 ASE build
-segfaults at startup on the host's kernel 7.0 and under Docker Desktop emulation on Apple Silicon.
-Login `tester` / `guest1234` (image default, PoC only), database `testdb`, port 5000.
+Everything runs as Docker containers on this Mac, on the `gridgain_default` network: MariaDB (`mariadb`), Oracle (`oracle`), the three GridGain nodes, the API and both
+CDC readers. Nothing is remote. MariaDB login `crm` / `crm` (PoC only), database `crm`, port 3306; Oracle `travel` / `travel`, service `FREEPDB1`, port 1521.
+Host-side tools default to those addresses (`MARIADB_URL`, `ORA_URL`, `GG_URL`, ... override them).
 
 ## GridGain note
 The `gridgain-8.9` skill says `gridgain/community` is amd64-only; that is outdated for 8.9.38, which
 publishes amd64 and arm64.
 
-## Sybase in Docker: where it runs
-
-ASE runs in a VM on `llama` (kernel 5.4). A plain container works too on any native x86_64 Linux host, including
-kernels >= 5.8, with the `LD_PRELOAD` shim in [sybase/docker/](sybase/docker/) (verified on llama, kernel 7.0). It does
-**not** run on the Mac: Rosetta and QEMU user-mode both crash it at startup. Root cause, the fix and everything that was
-tried are in [sybase/docker/README.md](sybase/docker/README.md).
-
-## ASE gotchas hit so far
-- Column order is `type default <x> not null` (default before nullability).
-- `raiserror` needs a message number >= 20000 for user errors.
-- jTDS: `prepareCall` parses plain T-SQL as a JDBC escape; use `createStatement` for `exec`/`declare` batches.
+## MariaDB gotchas hit so far
+- `-- ` comments need a space after the dashes: a `-----` banner line is a syntax error (write `-- -----`).
+- The `mariadb` client splits statements at `;`, so stored procedures and compound blocks need `DELIMITER //` (`sql.sh -f` handles files, `sql.sh -b` one block).
+- `CAST(decimal AS SIGNED)` rounds, T-SQL's `convert(int, ...)` truncates: use `FLOOR` where the compute job truncates.
+- A trigger that calls a procedure is allowed; one that starts a transaction or uses dynamic SQL is not.
+- `START TRANSACTION` inside a procedure commits any transaction the caller had open.
+- Procedures cannot return a status code: errors are `SIGNAL ... SET MYSQL_ERRNO = 20002`, and Connector/J reports that number in `SQLException.getErrorCode()`.
 
 ## GridGain 8.9 gotchas hit in Phase 2
 - Thin-client compute is off by default (`maxActiveComputeTasksPerConnection` = 0).
 - A cache transaction cannot touch ATOMIC caches, and the first use of an atomic sequence starts a system
   cache, which is not allowed inside a transaction: allocate ids before `txStart`.
-- The CDC reader runs from `target/classes`; after editing `gridgain-schema-sybase.sql` rebuild (`mvn package`) or the
+- The CDC reader runs from `target/classes`; after editing `gridgain-schema-mariadb.sql` rebuild (`mvn package`) or the
   old DDL is used.
 
 ## Oracle gotchas hit so far

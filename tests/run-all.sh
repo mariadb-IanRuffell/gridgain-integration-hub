@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run every unit test in the project. None of them needs the cluster, Sybase or Oracle.   tests/run-all.sh [python|cdc|phase2|api]
+# Run every unit test in the project. None of them needs the cluster, MariaDB or Oracle.   tests/run-all.sh [python|cdc|phase2|api]
 set -euo pipefail
 cd "$(dirname "$0")/.."
 want="${1:-all}"

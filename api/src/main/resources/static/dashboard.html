@@ -49,7 +49,7 @@
   .barfg.oracle { background: var(--c4); }
   .barfg.gridgain { background: var(--c2); }
   td.src { text-align: left; font-size: 12.5px; color: var(--muted); }
-  td.src-oracle { color: var(--c4); } td.src-sybase { color: var(--c1); } td.src-gridgain { color: var(--c2); }
+  td.src-oracle { color: var(--c4); } td.src-mariadb { color: var(--c1); } td.src-gridgain { color: var(--c2); }
   td.txt, th.txt { text-align: left; }
   .offerhead { display: flex; flex-wrap: wrap; gap: 8px 24px; align-items: baseline; margin-bottom: 8px; }
   .offerhead .sub b { color: var(--ink); font-weight: 600; }
@@ -67,11 +67,11 @@
 <header>
   <div>
     <h1>Customer 360 · live dashboard</h1>
-    <div class="sub">Sybase ASE + Oracle → GridGain via CDC, and the REST API in front of the hub · <a href="/swagger-ui.html">API docs</a></div>
+    <div class="sub">MariaDB + Oracle → GridGain via CDC, and the REST API in front of the hub · <a href="/swagger-ui.html">API docs</a></div>
   </div>
   <div class="pills">
     <span class="pill" id="pill-cluster"><i></i>cluster …</span>
-    <span class="pill" id="pill-cdc-sybase"><i></i>CDC Sybase …</span>
+    <span class="pill" id="pill-cdc-mariadb"><i></i>CDC MariaDB …</span>
     <span class="pill" id="pill-cdc-oracle"><i></i>CDC Oracle …</span>
     <span class="pill" id="pill-api"><i></i>API …</span>
   </div>
@@ -117,7 +117,7 @@
       <select id="rate"><option value="0">off</option><option value="5">5 req/s</option><option value="20">20 req/s</option><option value="50">50 req/s</option><option value="100">100 req/s</option></select>
     </label>
     <span class="sub" id="gen-note"></span>
-    <span class="sub" style="margin-left:auto">Generate CDC load from the project folder, Sybase: <code>./sybase/gen-load.sh --orders 60 5</code> (5 new orders/s) or <code>./sybase/gen-load.sh 60 100</code> (100 row touches/s) · Oracle: <code>./oracle/gen-load.sh 60 5</code> (5 bookings/s)</span>
+    <span class="sub" style="margin-left:auto">Generate CDC load from the project folder, MariaDB: <code>./mariadb/gen-load.sh --orders 60 5</code> (5 new orders/s) or <code>./mariadb/gen-load.sh 60 100</code> (100 row touches/s) · Oracle: <code>./oracle/gen-load.sh 60 5</code> (5 bookings/s)</span>
   </section>
 
   <section class="grid2">
@@ -198,14 +198,14 @@ function fmtAxis(v) { return v >= 1000 ? (v / 1000).toFixed(v >= 10000 ? 0 : 1) 
 const rate = u => v => fmtRate(v) + " " + u;
 const charts = [
   new Chart($("ch-cdc"), $("lg-cdc"), [
-    { key: "cdcEventsPerSec", label: "Sybase events/s", color: "--c1", fmt: rate("/s") },
+    { key: "cdcEventsPerSec", label: "MariaDB events/s", color: "--c1", fmt: rate("/s") },
     { key: "oraEventsPerSec", label: "Oracle events/s", color: "--c4", fmt: rate("/s") },
-    { key: "cdcDeletesPerSec", label: "Sybase deletes/s", color: "--c3", fmt: rate("/s") },
+    { key: "cdcDeletesPerSec", label: "MariaDB deletes/s", color: "--c3", fmt: rate("/s") },
     { key: "oraDeletesPerSec", label: "Oracle deletes/s", color: "--c2", fmt: rate("/s") }]),
   new Chart($("ch-lag"), $("lg-lag"), [
-    { key: "cdcPending", label: "Sybase backlog", color: "--c1", fmt: v => fmtInt(v) },
+    { key: "cdcPending", label: "MariaDB backlog", color: "--c1", fmt: v => fmtInt(v) },
     { key: "oraPending", label: "Oracle backlog", color: "--c4", fmt: v => fmtInt(v) },
-    { key: "cdcLatencyMs", label: "Sybase latency (right axis)", color: "--c3", axis: "r", fmt: v => fmtInt(v) + " ms" },
+    { key: "cdcLatencyMs", label: "MariaDB latency (right axis)", color: "--c3", axis: "r", fmt: v => fmtInt(v) + " ms" },
     { key: "oraLatencyMs", label: "Oracle latency (right axis)", color: "--c2", axis: "r", fmt: v => fmtInt(v) + " ms" }]),
   new Chart($("ch-api"), $("lg-api"), [
     { key: "apiReqPerSec", label: "requests/s", color: "--c1", fmt: rate("/s") },
@@ -237,20 +237,20 @@ async function pollSummary() {
   pill("pill-api", "ok", "API up " + (s.api.uptimeSeconds < 120 ? s.api.uptimeSeconds + " s" : Math.round(s.api.uptimeSeconds / 60) + " min"));
   pill("pill-cluster", s.cluster.nodes >= 3 ? "ok" : s.cluster.nodes > 0 ? "warn" : "bad", s.cluster.nodes + " GridGain node" + (s.cluster.nodes === 1 ? "" : "s") + " online");
   const cdc = {}; (s.cdc || []).forEach(c => { cdc[c.source] = c; });
-  for (const [src, label] of [["sybase", "Sybase"], ["oracle", "Oracle"]]) {
+  for (const [src, label] of [["mariadb", "MariaDB"], ["oracle", "Oracle"]]) {
     const c = cdc[src], id = "pill-cdc-" + src;
     if (!c) pill(id, "bad", "CDC " + label + ": no data (reader never ran)");
     else pill(id, c.running ? "ok" : "bad", c.running ? "CDC " + label + " running" : "CDC " + label + " stopped (last seen " + ago(c.lastUpdate) + ")");
   }
   const all = Object.values(cdc), sum = f => all.reduce((a, c) => a + f(c), 0);
-  const sy = cdc.sybase, or = cdc.oracle;
+  const sy = cdc.mariadb, or = cdc.oracle;
 
   $("k-rows").textContent = fmtInt(s.totalGridgainRows);
   $("k-rows-n").textContent = s.totalSourceRows != null ? "sources: " + fmtInt(s.totalSourceRows) : "source counts pending";
   $("k-cdc").textContent = all.length ? fmtInt(sum(c => c.totalEvents)) : "–";
-  $("k-cdc-n").textContent = all.length ? `Sybase ${fmtInt(sy ? sy.totalEvents : 0)} · Oracle ${fmtInt(or ? or.totalEvents : 0)}` : "";
+  $("k-cdc-n").textContent = all.length ? `MariaDB ${fmtInt(sy ? sy.totalEvents : 0)} · Oracle ${fmtInt(or ? or.totalEvents : 0)}` : "";
   $("k-lag").textContent = all.length ? fmtInt(sum(c => c.pendingEvents)) : "–";
-  $("k-lag-n").textContent = all.length ? `Sybase ${fmtInt(sy ? sy.pendingEvents : 0)} · Oracle ${fmtInt(or ? or.pendingEvents : 0)}` : "";
+  $("k-lag-n").textContent = all.length ? `MariaDB ${fmtInt(sy ? sy.pendingEvents : 0)} · Oracle ${fmtInt(or ? or.pendingEvents : 0)}` : "";
   $("k-api").textContent = fmtInt(s.api.requests);
   $("k-api-n").textContent = `${fmtInt(s.api.reads)} reads · ${fmtInt(s.api.writes)} writes · ${fmtInt(s.api.clientErrors + s.api.serverErrors)} errors`;
   $("k-lat").textContent = s.api.requests ? s.api.avgMs.toFixed(1) + " ms" : "–";
@@ -259,7 +259,7 @@ async function pollSummary() {
   const max = Math.max(1, ...s.tables.map(t => t.gridgainRows));
   $("tbl").innerHTML = s.tables.map(t => {
     const d = t.difference, cls = d == null ? "" : d === 0 ? "delta-0" : d > 0 ? "delta-pos" : "delta-neg";
-    return `<tr><td>${t.name}</td><td class="src src-${t.source}">${{oracle: "Oracle", sybase: "Sybase", gridgain: "GridGain"}[t.source] || t.source}</td><td>${fmtInt(t.gridgainRows)}</td><td>${fmtInt(t.sourceRows)}</td>` +
+    return `<tr><td>${t.name}</td><td class="src src-${t.source}">${{oracle: "Oracle", mariadb: "MariaDB", gridgain: "GridGain"}[t.source] || t.source}</td><td>${fmtInt(t.gridgainRows)}</td><td>${fmtInt(t.sourceRows)}</td>` +
       `<td class="${cls}">${d == null ? "–" : d === 0 ? "in sync" : (d > 0 ? "+" : "") + fmtInt(d)}</td>` +
       `<td class="bar"><div class="barbg"><div class="barfg ${t.source}" style="width:${t.gridgainRows / max * 100}%"></div></div></td></tr>`;
   }).join("");

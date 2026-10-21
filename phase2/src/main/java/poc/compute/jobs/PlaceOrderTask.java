@@ -25,7 +25,7 @@ import org.apache.ignite.transactions.TransactionIsolation;
  *  - All-or-nothing: if the 2nd item is out of stock nothing is changed (the T-SQL flow left a NEW order
  *    with the 1st item already decremented).
  *  - New ids come from GridGain sequences starting at 1,000,000,000, so they can never collide with
- *    Sybase identity values that CDC is still replicating.
+ *    MariaDB identity values that CDC is still replicating.
  */
 public class PlaceOrderTask extends AffinityTask<Map<String, Object>> {
     @Override

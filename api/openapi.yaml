@@ -3,17 +3,17 @@ info:
   title: Customer 360 API
   description: |
     CRUD and business operations over two source systems consolidated in a GridGain 8.9 data hub:
-    customer / order / loyalty data from Sybase ASE and travel / reservation data from Oracle, both replicated by CDC
+    customer / order / loyalty data from MariaDB and travel / reservation data from Oracle, both replicated by CDC
     and joinable on customer_id (hub endpoints).
 
     * Resource endpoints read and write GridGain tables through SQL.
     * Business operations (`360`, `recalculate`, `scoring`, `POST /orders`) call the GridGain compute
-      jobs that replace the former Sybase stored procedures, so rules such as stock checks,
+      jobs that replace the former MariaDB stored procedures, so rules such as stock checks,
       loyalty points and tier changes are applied atomically on the node that owns the customer.
     * Timestamps are ISO-8601 UTC. Errors use RFC 7807 problem details.
 
-    Note: while Sybase is still the system of record, rows written through this API exist only in
-    GridGain (CDC is one-way, Sybase to GridGain).
+    Note: while MariaDB is still the system of record, rows written through this API exist only in
+    GridGain (CDC is one-way, MariaDB to GridGain).
   version: 1.0.0
 servers:
 - url: http://localhost:8080
@@ -43,7 +43,7 @@ tags:
   description: Reservations. Booking and cancelling run the compute jobs that replaced
     the PL/SQL procedures
 - name: Hub
-  description: Endpoints that combine BOTH source systems (Sybase customers x Oracle
+  description: Endpoints that combine BOTH source systems (MariaDB customers x Oracle
     travel) plus disruption processing
 - name: Dashboard
   description: Data behind the live dashboard page at /dashboard.html
@@ -1087,8 +1087,8 @@ paths:
       tags:
       - Bookings
       summary: List bookings
-      description: "Newest first. customerId is the Sybase customer id. Segments are\
-        \ only included by GET /bookings/{id}."
+      description: "Newest first. customerId is the MariaDB customer id. Segments\
+        \ are only included by GET /bookings/{id}."
       operationId: list_7
       parameters:
       - name: customerId
@@ -1254,11 +1254,11 @@ paths:
       tags:
       - Flights
       summary: "Hub: who is affected by a disruption, ranked by customer value"
-      description: "Joins the flight's passengers (Oracle) with their customers (Sybase):\
+      description: "Joins the flight's passengers (Oracle) with their customers (MariaDB):\
         \ loyalty tier, points and completed-order spend. Passengers are ranked by\
         \ priority (tier, cabin, retail spend) and each gets the base compensation\
         \ for the flight's delay or cancellation and a tier-weighted suggested amount\
-        \ (Sybase's loyalty multiplier). Runs one job per cluster node on the data\
+        \ (MariaDB's loyalty multiplier). Runs one job per cluster node on the data\
         \ it owns."
       operationId: impact
       parameters:
@@ -1306,7 +1306,7 @@ paths:
       - Dashboard
       summary: "Table sizes, CDC status and REST totals"
       description: "Row counts per table in GridGain and (as last counted by the CDC\
-        \ reader) in Sybase, CDC position, lag and cumulative counters, REST request\
+        \ reader) in MariaDB, CDC position, lag and cumulative counters, REST request\
         \ totals and the GridGain server nodes. Refreshed every 2-5 seconds."
       operationId: summary
       responses:
@@ -1468,7 +1468,7 @@ paths:
       tags:
       - Hub
       summary: "Hub: one customer view across BOTH source systems"
-      description: "Joins data that no single source holds. From Sybase: profile,\
+      description: "Joins data that no single source holds. From MariaDB: profile,\
         \ loyalty tier and points, completed orders. From Oracle: bookings, miles,\
         \ upcoming trips and the ones on delayed or cancelled flights. Also combines\
         \ them: lifetime_value = retail spend + travel spend. Sections: profile, retail,\
@@ -1521,7 +1521,7 @@ paths:
       tags:
       - Hub
       summary: List computed compensation
-      description: Written by POST /disruptions/process. Filter by customer (Sybase
+      description: Written by POST /disruptions/process. Filter by customer (MariaDB
         id) or flight.
       operationId: compensation
       parameters:

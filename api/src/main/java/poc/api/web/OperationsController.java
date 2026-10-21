@@ -14,7 +14,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import poc.api.service.ComputeService;
 
-/** Business operations that run as GridGain compute jobs (replacing Sybase stored procedures). */
+/** Business operations that run as GridGain compute jobs (replacing MariaDB stored procedures). */
 @RestController
 @RequestMapping("/api/v1")
 @Tag(name = "Operations")

@@ -17,7 +17,7 @@ final class Ddl {
     final Map<String, String> options = new LinkedHashMap<>();
 
     static Ddl load(String resource) throws IOException {
-        String sql = SybaseCdc.stripComments(SybaseCdc.readResource(resource));
+        String sql = MariaDbCdc.stripComments(MariaDbCdc.readResource(resource));
         Ddl d = new Ddl();
         Matcher m = Pattern.compile("CREATE TABLE IF NOT EXISTS (\\w+) \\((.*?)\\n?\\) WITH \"([^\"]*)\"", Pattern.DOTALL).matcher(sql);
         while (m.find()) {

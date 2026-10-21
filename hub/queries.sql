@@ -1,10 +1,10 @@
--- Cross-source SQL on the GridGain hub: Sybase tables (customer, orders, interaction, loyalty_*) joined with Oracle tables
+-- Cross-source SQL on the GridGain hub: MariaDB tables (customer, orders, interaction, loyalty_*) joined with Oracle tables
 -- (booking, booking_segment, flight, airport). The join key is customer_id. Customer-owned tables from both systems are colocated
 -- on customer_id, so these joins run on the node that owns each customer, with no data movement.
 -- Connect (DBeaver): jdbc:ignite:thin://127.0.0.1:10800,127.0.0.1:10801,127.0.0.1:10802   (no user / password)
 -- Run all of them:  ./run.sh
 
--- 1. Lifetime value: retail spend (Sybase) + travel spend (Oracle) per customer
+-- 1. Lifetime value: retail spend (MariaDB) + travel spend (Oracle) per customer
 SELECT c.customer_id, c.last_name, c.loyalty_tier,
        COALESCE(o.retail_spend, 0) AS retail_spend,
        COALESCE(t.travel_spend, 0) AS travel_spend,
@@ -17,7 +17,7 @@ LEFT JOIN (SELECT customer_id, SUM(fare) AS travel_spend FROM booking_segment WH
 ORDER BY lifetime_value DESC
 LIMIT 10;
 
--- 2. Where the money comes from, by loyalty tier (a Sybase attribute) across both systems
+-- 2. Where the money comes from, by loyalty tier (a MariaDB attribute) across both systems
 SELECT c.loyalty_tier,
        COUNT(*) AS customers,
        SUM(COALESCE(o.retail_spend, 0)) AS retail_total,
@@ -31,7 +31,7 @@ LEFT JOIN (SELECT customer_id, SUM(fare) AS travel_spend FROM booking_segment WH
 GROUP BY c.loyalty_tier
 ORDER BY SUM(COALESCE(o.retail_spend, 0)) + SUM(COALESCE(t.travel_spend, 0)) DESC;
 
--- 3. Proactive service: customers with a recent negative interaction (Sybase) who are booked on a delayed or cancelled upcoming flight (Oracle)
+-- 3. Proactive service: customers with a recent negative interaction (MariaDB) who are booked on a delayed or cancelled upcoming flight (Oracle)
 SELECT DISTINCT c.customer_id, c.last_name, c.loyalty_tier, i.type AS interaction_type, i.subject,
        f.flight_no, f.origin, f.destination, f.dep_time, f.status AS flight_status, f.delay_minutes
 FROM interaction i
@@ -42,7 +42,7 @@ WHERE i.sentiment < 0
 ORDER BY f.dep_time, c.customer_id
 LIMIT 15;
 
--- 4. Top routes for GOLD and PLATINUM customers (tier from Sybase, routes from Oracle)
+-- 4. Top routes for GOLD and PLATINUM customers (tier from MariaDB, routes from Oracle)
 SELECT f.origin, f.destination, COUNT(*) AS segments, SUM(s.fare) AS fare_total
 FROM booking_segment s
 JOIN customer c ON c.customer_id = s.customer_id
@@ -52,7 +52,7 @@ GROUP BY f.origin, f.destination
 ORDER BY fare_total DESC
 LIMIT 10;
 
--- 5. Cross-sell list: big retail spenders (Sybase) who have never booked a flight (Oracle)
+-- 5. Cross-sell list: big retail spenders (MariaDB) who have never booked a flight (Oracle)
 SELECT c.customer_id, c.last_name, c.loyalty_tier, c.email, o.retail_spend
 FROM customer c
 JOIN (SELECT customer_id, SUM(total_amount) AS retail_spend FROM orders WHERE status = 'COMPLETED' GROUP BY customer_id) o
@@ -62,7 +62,7 @@ WHERE c.status = 'ACTIVE'
 ORDER BY o.retail_spend DESC
 LIMIT 10;
 
--- 6. Disruption cost by tier: compensation owed (Oracle) against how loyal the affected customers are (Sybase)
+-- 6. Disruption cost by tier: compensation owed (Oracle) against how loyal the affected customers are (MariaDB)
 SELECT c.loyalty_tier, COUNT(*) AS compensated_segments, SUM(k.amount) AS compensation_total
 FROM compensation k
 JOIN customer c ON c.customer_id = k.customer_id

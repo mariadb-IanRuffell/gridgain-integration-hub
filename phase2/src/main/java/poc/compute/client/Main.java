@@ -10,7 +10,7 @@ import org.apache.ignite.client.ClientRetryAllPolicy;
 import org.apache.ignite.client.IgniteClient;
 import org.apache.ignite.configuration.ClientConfiguration;
 
-/** CLI for the GridGain compute jobs that replace the Sybase stored procedures. */
+/** CLI for the GridGain compute jobs that replace the MariaDB stored procedures. */
 public final class Main {
     static final String PKG = "poc.compute.jobs.";
 
@@ -44,7 +44,7 @@ public final class Main {
                     break;
                 }
                 case "parity":
-                    System.exit((a.length > 1 && a[1].equals("oracle") ? new ParityOracle(client).run() : new ParitySybase(client).run(a)) ? 0 : 1);
+                    System.exit((a.length > 1 && a[1].equals("oracle") ? new ParityOracle(client).run() : new ParityMariaDb(client).run(a)) ? 0 : 1);
                     break;
                 default: usage();
             }

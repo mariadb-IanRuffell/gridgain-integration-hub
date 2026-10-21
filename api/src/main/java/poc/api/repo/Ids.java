@@ -7,7 +7,7 @@ import org.apache.ignite.client.IgniteClient;
 import org.springframework.stereotype.Component;
 
 /**
- * Cluster-wide id generators (GridGain atomic sequences). Ids start at 1,000,000,000, far above the Sybase
+ * Cluster-wide id generators (GridGain atomic sequences). Ids start at 1,000,000,000, far above the MariaDB
  * identity values that CDC replicates, so rows created here can never collide with replicated rows.
  * Order ids are NOT generated here: orders are created by the place-order compute job, which owns its own sequences.
  */

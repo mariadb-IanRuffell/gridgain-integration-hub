@@ -1,0 +1,36 @@
+# MariaDB 11.4 (customer / CRM / commerce system): native arm64 and amd64, so it runs on this Mac.
+# Joins the GridGain cluster's Docker network so the CDC reader reaches it as mariadb:3306.
+#   docker compose up -d        first start takes ~15 s; login crm/crm, database crm, port 3306
+services:
+  mariadb:
+    image: mariadb:11.4
+    container_name: mariadb
+    ports:
+      - "3306:3306"
+    environment:
+      MARIADB_ROOT_PASSWORD: root        # PoC values
+      MARIADB_DATABASE: crm
+      MARIADB_USER: crm
+      MARIADB_PASSWORD: crm
+      TZ: UTC
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-time-zone=+00:00
+      - --log-bin-trust-function-creators=1
+    volumes:
+      - mariadb-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
+
+volumes:
+  mariadb-data:
+
+networks:
+  default:
+    name: gridgain_default
+    external: true

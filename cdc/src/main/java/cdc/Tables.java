@@ -5,7 +5,7 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-/** The replicated tables. Keep in sync with sql/01_schema.sql and gridgain-schema-sybase.sql. */
+/** The replicated tables. Keep in sync with sql/01_schema.sql and gridgain-schema-mariadb.sql. */
 final class Tables {
     static final List<TableSpec> ALL = List.of(
         TableSpec.plain("customer", "customer_id", "customer_id", "first_name", "last_name", "email", "phone",

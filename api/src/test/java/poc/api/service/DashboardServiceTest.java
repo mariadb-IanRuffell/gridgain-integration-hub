@@ -67,7 +67,7 @@ class DashboardServiceTest {
         TableSize customer = s.tables().stream().filter(t -> t.name().equals("customer")).findFirst().orElseThrow();
         TableSize booking = s.tables().stream().filter(t -> t.name().equals("booking")).findFirst().orElseThrow();
         TableSize flight = s.tables().stream().filter(t -> t.name().equals("flight")).findFirst().orElseThrow();
-        assertEquals("sybase", customer.source());
+        assertEquals("mariadb", customer.source());
         assertEquals(0L, customer.difference());
         assertEquals("oracle", booking.source());
         assertEquals(1L, booking.difference());               // GridGain has one row the source does not (e.g. created through the API)
@@ -141,7 +141,7 @@ class DashboardServiceTest {
     @Test
     void cdcRatesUseTheReadersOwnPublishTimestamps() throws Exception {
         long now = System.currentTimeMillis();
-        when(repo.cdcStatus(DashboardRepository.SYBASE_CONSUMER)).thenReturn(
+        when(repo.cdcStatus(DashboardRepository.MARIADB_CONSUMER)).thenReturn(
             Optional.of(row(1000, 900, 100, 4, Instant.ofEpochMilli(now - 2000))),
             Optional.of(row(1300, 1100, 200, 7, Instant.ofEpochMilli(now - 1000))));
         service.sample();
@@ -173,11 +173,11 @@ class DashboardServiceTest {
     @Test
     void aLiveReaderIsRunningAndBothReadersAreListed() {
         Instant fresh = Instant.now();
-        when(repo.cdcStatus(DashboardRepository.SYBASE_CONSUMER)).thenReturn(Optional.of(row(10, 10, 0, 0, fresh)));
+        when(repo.cdcStatus(DashboardRepository.MARIADB_CONSUMER)).thenReturn(Optional.of(row(10, 10, 0, 0, fresh)));
         when(repo.cdcStatus(DashboardRepository.ORACLE_CONSUMER)).thenReturn(Optional.of(row(20, 20, 0, 0, fresh)));
         service.sample();
         List<CdcStatus> cdc = service.summary().cdc();
-        assertEquals(List.of("sybase", "oracle"), cdc.stream().map(CdcStatus::source).toList());
+        assertEquals(List.of("mariadb", "oracle"), cdc.stream().map(CdcStatus::source).toList());
         assertTrue(cdc.stream().allMatch(CdcStatus::running));
     }
 

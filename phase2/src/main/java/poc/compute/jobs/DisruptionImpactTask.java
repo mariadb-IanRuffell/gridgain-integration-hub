@@ -19,8 +19,8 @@ import org.apache.ignite.resources.IgniteInstanceResource;
 
 /**
  * HUB JOB: who is affected when a flight is delayed or cancelled, ranked by how much the customer is worth.
- * Joins Oracle's passengers (booking_segment, booking, flight) with Sybase's customers (tier, points, completed orders), on the node
- * that owns each customer. The tier multiplier from Sybase's loyalty_tier_rule scales the Oracle-derived base compensation,
+ * Joins Oracle's passengers (booking_segment, booking, flight) with MariaDB's customers (tier, points, completed orders), on the node
+ * that owns each customer. The tier multiplier from MariaDB's loyalty_tier_rule scales the Oracle-derived base compensation,
  * so loyal customers are looked after first and compensated more generously. Argument: flight_id.
  *
  * priority = tier weight x 100 + cabin weight x 10 + min(9, retail spend / 10,000)

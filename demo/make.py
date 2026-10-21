@@ -112,7 +112,7 @@ def s3(): html_scene("s3", ensure_audio("s3") + 2.6)
 
 def loads(syb_orders=12, syb_secs=5, ora_n=12, ora_secs=8):
     def g(t0):
-        a = threading.Thread(target=lambda: sh(f"cd '{PROJ}/sybase' && ./gen-load.sh --orders {syb_orders} {syb_secs}"))
+        a = threading.Thread(target=lambda: sh(f"cd '{PROJ}/mariadb' && ./gen-load.sh --orders {syb_orders} {syb_secs}"))
         b = threading.Thread(target=lambda: sh(f"cd '{PROJ}/oracle' && ./gen-load.sh {ora_n} {ora_secs}"))
         a.start(); b.start(); a.join(); b.join()
     return g

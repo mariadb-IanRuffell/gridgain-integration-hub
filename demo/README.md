@@ -1,5 +1,7 @@
 # Demo video
 
+> **Not yet re-recorded on the `mariadb-replaces-sybase` branch.** The video and its narration (`data/narration.json`, `scenes/`, captured outputs in `data/`) still show the Sybase ASE version of the project, as on `main`. `make.py` already points at `mariadb/gen-load.sh`, but the narration, the scene text and the captured parity output need updating before a rebuild.
+
 `customer360-demo.mp4` (about 4.5 min, 1080p, narrated) shows both sources end to end. Almost everything on screen is real:
 the dashboard scenes are recorded from the running system while real load runs, and the terminal scenes replay output captured
 from real runs (`data/parity.txt`, `data/parity-oracle.txt`, `data/hub-sql*.txt`, `data/api2.json`). The architecture, source,

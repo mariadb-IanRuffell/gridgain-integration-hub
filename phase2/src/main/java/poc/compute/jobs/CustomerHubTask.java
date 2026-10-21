@@ -9,10 +9,10 @@ import org.apache.ignite.compute.ComputeJob;
 
 /**
  * HUB JOB (no equivalent in either source system): one view of a customer that joins data from BOTH systems.
- *   Sybase (CRM / commerce): customer profile, loyalty tier and points, completed orders.
+ *   MariaDB (CRM / commerce): customer profile, loyalty tier and points, completed orders.
  *   Oracle (travel):         bookings, miles, upcoming trips and the ones hit by a delay or cancellation.
  * Customer, orders, booking and booking_segment are all colocated on customer_id, so everything is read on the owning node.
- * lifetime_value adds retail spend (Sybase) and travel spend (Oracle), which neither system could compute alone.
+ * lifetime_value adds retail spend (MariaDB) and travel spend (Oracle), which neither system could compute alone.
  */
 public class CustomerHubTask extends AffinityTask<Integer> {
     @Override

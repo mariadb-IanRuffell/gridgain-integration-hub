@@ -18,17 +18,17 @@ public class OpenApiConfig {
                 .version("1.0.0")
                 .description("""
                     CRUD and business operations over two source systems consolidated in a GridGain 8.9 data hub:
-                    customer / order / loyalty data from Sybase ASE and travel / reservation data from Oracle, both replicated by CDC
+                    customer / order / loyalty data from MariaDB and travel / reservation data from Oracle, both replicated by CDC
                     and joinable on customer_id (hub endpoints).
 
                     * Resource endpoints read and write GridGain tables through SQL.
                     * Business operations (`360`, `recalculate`, `scoring`, `POST /orders`) call the GridGain compute
-                      jobs that replace the former Sybase stored procedures, so rules such as stock checks,
+                      jobs that replace the former MariaDB stored procedures, so rules such as stock checks,
                       loyalty points and tier changes are applied atomically on the node that owns the customer.
                     * Timestamps are ISO-8601 UTC. Errors use RFC 7807 problem details.
 
-                    Note: while Sybase is still the system of record, rows written through this API exist only in
-                    GridGain (CDC is one-way, Sybase to GridGain).
+                    Note: while MariaDB is still the system of record, rows written through this API exist only in
+                    GridGain (CDC is one-way, MariaDB to GridGain).
                     """))
             .servers(List.of(new Server().url("http://localhost:8080").description("Local Docker")))
             .tags(List.of(
@@ -42,7 +42,7 @@ public class OpenApiConfig {
                 new Tag().name("Airports").description("Airport reference data (Oracle travel system)"),
                 new Tag().name("Flights").description("Flight schedule, seat inventory and operations: delay, cancel (Oracle travel system)"),
                 new Tag().name("Bookings").description("Reservations. Booking and cancelling run the compute jobs that replaced the PL/SQL procedures"),
-                new Tag().name("Hub").description("Endpoints that combine BOTH source systems (Sybase customers x Oracle travel) plus disruption processing"),
+                new Tag().name("Hub").description("Endpoints that combine BOTH source systems (MariaDB customers x Oracle travel) plus disruption processing"),
                 new Tag().name("Dashboard").description("Data behind the live dashboard page at /dashboard.html")));
     }
 }

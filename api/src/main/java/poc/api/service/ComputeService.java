@@ -25,7 +25,7 @@ import poc.api.web.ApiExceptions.NotFound;
 import poc.api.web.ApiExceptions.Unavailable;
 
 /**
- * Calls the GridGain compute jobs (poc.compute.jobs.*, deployed on every node) that replaced the Sybase
+ * Calls the GridGain compute jobs (poc.compute.jobs.*, deployed on every node) that replaced the MariaDB
  * stored procedures. Jobs report business errors as {rc, error_no, error}, using the same numbers the
  * stored procedures raised (20002 not found, 20003 insufficient stock, ...); those are mapped to HTTP here.
  */
@@ -52,7 +52,7 @@ public class ComputeService {
     }
 
     /**
-     * Maps a job's business error to HTTP. Sybase codes (20002 customer not found, 20003 insufficient stock, 2000x bad input) and
+     * Maps a job's business error to HTTP. MariaDB codes (20002 customer not found, 20003 insufficient stock, 2000x bad input) and
      * Oracle codes (20103 flight / 20110 booking not found; 20106 flight closed, 20107 sold out, 20111 booking not active,
      * 20112 nothing to cancel, 20121 flight already operated = conflicts; 20104, 20105, 20120 bad input).
      */
@@ -167,16 +167,16 @@ public class ComputeService {
         return run("ProcessDisruptionsTask", arg);
     }
 
-    // ------------------------------------------------------------------ hub jobs (join Oracle travel data with Sybase CRM data)
+    // ------------------------------------------------------------------ hub jobs (join Oracle travel data with MariaDB CRM data)
 
-    /** Customer view joining both systems: profile, loyalty and retail spend (Sybase) with bookings, miles and trips (Oracle). */
+    /** Customer view joining both systems: profile, loyalty and retail spend (MariaDB) with bookings, miles and trips (Oracle). */
     public Map<String, Object> customerHub(int customerId) {
         Map<String, Object> r = checked(run("CustomerHubTask", customerId), "Customer", customerId);
         r.remove("rc");
         return r;
     }
 
-    /** Passengers on a flight ranked by customer value, with tier-weighted compensation (Oracle passengers x Sybase loyalty and orders). */
+    /** Passengers on a flight ranked by customer value, with tier-weighted compensation (Oracle passengers x MariaDB loyalty and orders). */
     public Map<String, Object> disruptionImpact(int flightId) {
         Map<String, Object> r = run("DisruptionImpactTask", flightId);
         r.remove("rc");

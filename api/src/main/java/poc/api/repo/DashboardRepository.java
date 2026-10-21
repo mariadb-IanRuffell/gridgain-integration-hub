@@ -18,17 +18,17 @@ public class DashboardRepository {
     public static final String NATIVE = "gridgain";
 
     public static final List<TableRef> TABLES = List.of(
-        new TableRef("customer", "sybase"), new TableRef("address", "sybase"), new TableRef("product", "sybase"),
-        new TableRef("orders", "sybase"), new TableRef("order_item", "sybase"), new TableRef("payment", "sybase"),
-        new TableRef("interaction", "sybase"), new TableRef("loyalty_txn", "sybase"), new TableRef("customer_score", "sybase"),
-        new TableRef("loyalty_tier_rule", "sybase"),
+        new TableRef("customer", "mariadb"), new TableRef("address", "mariadb"), new TableRef("product", "mariadb"),
+        new TableRef("orders", "mariadb"), new TableRef("order_item", "mariadb"), new TableRef("payment", "mariadb"),
+        new TableRef("interaction", "mariadb"), new TableRef("loyalty_txn", "mariadb"), new TableRef("customer_score", "mariadb"),
+        new TableRef("loyalty_tier_rule", "mariadb"),
         new TableRef("airport", "oracle"), new TableRef("flight", "oracle"), new TableRef("flight_inventory", "oracle"),
         new TableRef("booking", "oracle"), new TableRef("booking_segment", "oracle"), new TableRef("flight_event", "oracle"),
         new TableRef("compensation", "oracle"),
         new TableRef("customer_offer", NATIVE));
 
-    /** Consumer name each CDC reader publishes under in cdc_status. Sybase's is historical ("gridgain"). */
-    public static final String SYBASE_CONSUMER = "gridgain", ORACLE_CONSUMER = "oracle";
+    /** Consumer name each CDC reader publishes under in cdc_status. MariaDB's is historical ("gridgain"). */
+    public static final String MARIADB_CONSUMER = "mariadb", ORACLE_CONSUMER = "oracle";
 
     public record CdcRow(long lastChangeId, long pendingEvents, long totalEvents, long totalUpserts, long totalDeletes,
                          long batches, int lastBatchEvents, long lastBatchMs, long lastLatencyMs, Instant startedAt,
@@ -57,7 +57,7 @@ public class DashboardRepository {
 
     public Map<String, SourceCount> sourceRows() {
         Map<String, SourceCount> out = new LinkedHashMap<>();
-        jdbc.sql("SELECT table_name, sybase_rows, updated_at FROM cdc_table_counts").query((rs, n) -> {
+        jdbc.sql("SELECT table_name, source_rows, updated_at FROM cdc_table_counts").query((rs, n) -> {
             Cols c = new Cols(rs);
             out.put(c.string(), new SourceCount(rs.getLong(2), rs.getTimestamp(3).toInstant()));
             return null;

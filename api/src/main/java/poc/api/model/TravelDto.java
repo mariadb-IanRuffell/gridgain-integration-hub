@@ -13,7 +13,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 
-/** Shapes for the travel / reservations data (replicated from Oracle). Customers live in the Sybase CRM data; the two are joined by customer_id. */
+/** Shapes for the travel / reservations data (replicated from Oracle). Customers live in the MariaDB CRM data; the two are joined by customer_id. */
 public final class TravelDto {
     private TravelDto() {}
 

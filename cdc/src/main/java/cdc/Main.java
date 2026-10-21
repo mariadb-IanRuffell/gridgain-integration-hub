@@ -5,7 +5,7 @@ import java.util.Set;
 
 /**
  * CDC reader CLI.   run.sh init | run | once | status | verify
- * Source selected with CDC_SOURCE=sybase (default) or oracle; connection settings from the environment.
+ * Source selected with CDC_SOURCE=mariadb (default) or oracle; connection settings from the environment.
  */
 public final class Main {
     private static String env(String k, String d) {
@@ -20,10 +20,10 @@ public final class Main {
         int batch = Integer.parseInt(env("CDC_BATCH", "5000"));
 
         if (!Set.of("init", "run", "once", "status", "verify").contains(cmd)) {
-            System.err.println("usage: run.sh init | run | once | status | verify   (CDC_SOURCE=sybase|oracle)");
+            System.err.println("usage: run.sh init | run | once | status | verify   (CDC_SOURCE=mariadb|oracle)");
             System.exit(2);
         }
-        String source = env("CDC_SOURCE", "sybase");
+        String source = env("CDC_SOURCE", "mariadb");
         try (CdcSource cdc = open(source, ggUrl)) {
             switch (cmd) {
                 case "init" -> cdc.init();
@@ -41,14 +41,14 @@ public final class Main {
 
     private static CdcSource open(String source, String ggUrl) throws SQLException {
         switch (source) {
-            case "sybase":
-                return new SybaseCdc(env("ASE_URL", "jdbc:jtds:sybase://llama.local:5000/testdb"), env("ASE_USER", "tester"),
-                    env("ASE_PASSWORD", "guest1234"), ggUrl);
+            case "mariadb":
+                return new MariaDbCdc(env("MARIADB_URL", "jdbc:mariadb://localhost:3306/crm"), env("MARIADB_USER", "crm"),
+                    env("MARIADB_PASSWORD", "crm"), ggUrl);
             case "oracle":
                 return new OracleCdc(env("ORA_URL", "jdbc:oracle:thin:@//localhost:1521/FREEPDB1"), env("ORA_USER", "travel"),
                     env("ORA_PASSWORD", "travel"), ggUrl);
             default:
-                throw new IllegalArgumentException("CDC_SOURCE must be sybase or oracle, not " + source);
+                throw new IllegalArgumentException("CDC_SOURCE must be mariadb or oracle, not " + source);
         }
     }
 

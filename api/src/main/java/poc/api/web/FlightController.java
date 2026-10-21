@@ -120,9 +120,9 @@ public class FlightController {
 
     @GetMapping("/{flightId}/impact")
     @Operation(summary = "Hub: who is affected by a disruption, ranked by customer value",
-        description = "Joins the flight's passengers (Oracle) with their customers (Sybase): loyalty tier, points and completed-order spend. "
+        description = "Joins the flight's passengers (Oracle) with their customers (MariaDB): loyalty tier, points and completed-order spend. "
             + "Passengers are ranked by priority (tier, cabin, retail spend) and each gets the base compensation for the flight's delay or "
-            + "cancellation and a tier-weighted suggested amount (Sybase's loyalty multiplier). Runs one job per cluster node on the data it owns.")
+            + "cancellation and a tier-weighted suggested amount (MariaDB's loyalty multiplier). Runs one job per cluster node on the data it owns.")
     Map<String, Object> impact(@PathVariable int flightId) {
         get(flightId);
         return compute.disruptionImpact(flightId);

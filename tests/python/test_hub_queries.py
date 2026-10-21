@@ -17,7 +17,7 @@ def read(path):
 
 def schema_columns():
     cols = {}
-    for res in ("gridgain-schema-sybase.sql", "gridgain-schema-oracle.sql"):
+    for res in ("gridgain-schema-mariadb.sql", "gridgain-schema-oracle.sql"):
         sql = "\n".join(l for l in read("cdc/src/main/resources/" + res).splitlines() if not l.strip().startswith("--"))
         for m in re.finditer(r"CREATE TABLE IF NOT EXISTS (\w+) \((.*?)\n?\) WITH", sql, re.S):
             names = set()
@@ -61,7 +61,7 @@ class HubQueriesTest(unittest.TestCase):
     def setUpClass(cls):
         cls.stmts = statements()
         cls.cols = schema_columns()
-        cls.sybase = {"customer", "address", "product", "orders", "order_item", "payment", "interaction", "loyalty_txn",
+        cls.mariadb = {"customer", "address", "product", "orders", "order_item", "payment", "interaction", "loyalty_txn",
                       "customer_score", "loyalty_tier_rule"}
         cls.oracle = {"airport", "flight", "flight_inventory", "booking", "booking_segment", "flight_event", "compensation"}
 
@@ -77,9 +77,9 @@ class HubQueriesTest(unittest.TestCase):
     def test_every_query_joins_both_source_systems(self):
         for title, sql in self.stmts:
             tables = set(re.findall(r"(?:FROM|JOIN)\s+(\w+)", sql, re.I))
-            self.assertTrue(tables & self.sybase, f"{title}: no Sybase table")
+            self.assertTrue(tables & self.mariadb, f"{title}: no MariaDB table")
             self.assertTrue(tables & self.oracle, f"{title}: no Oracle table")
-            self.assertTrue(tables <= self.sybase | self.oracle, f"{title}: unknown {tables - self.sybase - self.oracle}")
+            self.assertTrue(tables <= self.mariadb | self.oracle, f"{title}: unknown {tables - self.mariadb - self.oracle}")
 
     def test_qualified_columns_exist(self):
         for title, sql in self.stmts:

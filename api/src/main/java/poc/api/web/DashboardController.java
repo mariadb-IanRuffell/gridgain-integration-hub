@@ -27,7 +27,7 @@ public class DashboardController {
 
     @GetMapping("/summary")
     @Operation(summary = "Table sizes, CDC status and REST totals",
-        description = "Row counts per table in GridGain and (as last counted by the CDC reader) in Sybase, CDC position, lag "
+        description = "Row counts per table in GridGain and (as last counted by the CDC reader) in MariaDB, CDC position, lag "
             + "and cumulative counters, REST request totals and the GridGain server nodes. Refreshed every 2-5 seconds.")
     Summary summary() {
         return dashboard.summary();

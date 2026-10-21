@@ -35,7 +35,9 @@ final class Metrics {
                 + "last_batch_events INT, last_batch_ms BIGINT, last_latency_ms BIGINT, started_at TIMESTAMP, updated_at TIMESTAMP) "
                 + "WITH \"template=partitioned,backups=1,cache_name=cdc_status\"");
             st.execute("CREATE TABLE IF NOT EXISTS cdc_table_counts (table_name VARCHAR(30) PRIMARY KEY, "
-                + "sybase_rows BIGINT, updated_at TIMESTAMP) WITH \"template=partitioned,backups=1,cache_name=cdc_table_counts\"");
+                + "source_rows BIGINT, updated_at TIMESTAMP) WITH \"template=partitioned,backups=1,cache_name=cdc_table_counts\"");
+            // the column used to be called source_rows: bring a table created by an older reader up to date
+            st.execute("ALTER TABLE cdc_table_counts ADD COLUMN IF NOT EXISTS source_rows BIGINT");
         }
         try (PreparedStatement ps = src.gg().prepareStatement(
                 "SELECT total_events, total_upserts, total_deletes, batches FROM cdc_status WHERE consumer = ?")) {
@@ -96,7 +98,7 @@ final class Metrics {
 
     private void counts(long now) throws SQLException {
         try (PreparedStatement ps = src.gg().prepareStatement(
-                "MERGE INTO cdc_table_counts (table_name, sybase_rows, updated_at) VALUES (?, ?, ?)")) {
+                "MERGE INTO cdc_table_counts (table_name, source_rows, updated_at) VALUES (?, ?, ?)")) {
             for (String t : src.tableNames()) {
                 ps.setString(1, t);
                 ps.setLong(2, src.countRows(t));

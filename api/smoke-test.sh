@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # End-to-end test of the running API: full CRUD lifecycles, validation and business-rule errors, and the
 # compute-job operations.   ./smoke-test.sh [base-url]
-# It creates rows (customers/products/an order, a flight with bookings) that stay in GridGain; `../cdc/run.sh init` resets GridGain to Sybase.
+# It creates rows (customers/products/an order, a flight with bookings) that stay in GridGain; `../cdc/run.sh init` resets GridGain to MariaDB.
 set -uo pipefail
 BASE="${1:-http://localhost:8080}/api/v1"
 PASS=0; FAIL=0; TMP="$(mktemp)"; trap 'rm -f "$TMP"' EXIT
@@ -132,16 +132,16 @@ req POST "/bookings/$BID/cancel"; status 409 "cancelling twice is 409"
 req POST /bookings/999999999/cancel; status 404 "cancel unknown booking is 404"
 req GET "/flights/$FID"; field '.inventory[] | select(.cabin=="BUSINESS") | .seatsAvailable' 1 "business seat released"
 
-echo "== flight operations, disruption processing and the hub (Oracle x Sybase)"
+echo "== flight operations, disruption processing and the hub (Oracle x MariaDB)"
 req POST "/flights/$FID/delay" '{"minutes":400,"reason":"smoke test"}'; status 200 "record a delay"; field .status DELAYED "flight DELAYED"; field .affectedBookings 2 "two bookings affected"
 req POST "/flights/$FID/delay" '{"minutes":0}'; status 400 "delay out of range rejected"
 req GET "/flights/$FID/events"; field length 1 "one flight event"; field '.[0].eventType' DELAY "event is a DELAY"
 req GET "/flights/$FID/impact"; status 200 "disruption impact (hub)"; field '.passengers | length' 2 "two affected passengers"
-field '.passengers[0].loyalty_tier != null' true "passengers carry the Sybase loyalty tier"; field '.total_base_compensation == 500' true "base compensation = 2 x 50% of 500"
+field '.passengers[0].loyalty_tier != null' true "passengers carry the MariaDB loyalty tier"; field '.total_base_compensation == 500' true "base compensation = 2 x 50% of 500"
 req POST "/disruptions/process?minDelay=180"; status 200 "process disruptions"; field '[.[] | select(.reason=="DELAY_360")] | length' 1 "a DELAY_360 group exists (400 min delay)"
 req GET "/compensation?flightId=$FID"; field .total 2 "two compensation rows for the flight"; field '.items[0].amount == 250' true "50% of the 500 economy fare"
 req GET "/customers/$CID/trips"; status 200 "customer trips"; field '.upcoming | length >= 2' true "upcoming trips include the new bookings"
-req GET "/customers/$CID/hub"; status 200 "customer hub view"; field '.profile[0].customer_id' "$CID" "hub profile is this customer (Sybase)"
+req GET "/customers/$CID/hub"; status 200 "customer hub view"; field '.profile[0].customer_id' "$CID" "hub profile is this customer (MariaDB)"
 field '.travel[0].bookings >= 2' true "hub has the customer's bookings (Oracle)"; field '.at_risk_trips | length >= 2' true "hub flags trips on the delayed flight"
 field '.value[0].lifetime_value == (.value[0].retail_spend + .value[0].travel_spend)' true "lifetime value = retail spend + travel spend"
 req GET /customers/999999999/hub; status 404 "hub for unknown customer is 404"

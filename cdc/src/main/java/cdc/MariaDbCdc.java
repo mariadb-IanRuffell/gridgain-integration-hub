@@ -18,28 +18,28 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Trigger-based CDC from Sybase ASE to GridGain 8.9.
+ * Trigger-based CDC from MariaDB to GridGain 8.9.
  *
- * <p>Sybase triggers append (table, op, pk) to cdc_change_log. For each batch of log rows this class
- * collapses them to the distinct changed keys, re-reads the current row from Sybase and MERGEs it into
+ * <p>MariaDB triggers append (table, op, pk) to cdc_change_log (ids are gapless and commit-ordered, see sql generate_cdc.py). For each batch of log rows this class
+ * collapses them to the distinct changed keys, re-reads the current row from MariaDB and MERGEs it into
  * GridGain, or DELETEs it when the row no longer exists. Applying current state (not individual
  * operations) makes every batch idempotent, so the offset is committed only after GridGain has the
  * data and a crash simply replays the last batch (at-least-once delivery, effectively-once result).
  */
-final class SybaseCdc implements CdcSource {
-    static final String CONSUMER = "gridgain";
+final class MariaDbCdc implements CdcSource {
+    static final String CONSUMER = "mariadb";
     private static final int IN_CHUNK = 500;
     private static final int BATCH = 1000;
 
-    private final String aseUrl, aseUser, asePass, ggUrl;
-    private Connection ase, gg;
+    private final String dbUrl, dbUser, dbPass, ggUrl;
+    private Connection db, gg;
 
-    SybaseCdc(String aseUrl, String aseUser, String asePass, String ggUrl) throws SQLException {
-        this.aseUrl = aseUrl; this.aseUser = aseUser; this.asePass = asePass; this.ggUrl = ggUrl;
+    MariaDbCdc(String dbUrl, String dbUser, String dbPass, String ggUrl) throws SQLException {
+        this.dbUrl = dbUrl; this.dbUser = dbUser; this.dbPass = dbPass; this.ggUrl = ggUrl;
         connect();
     }
 
-    Connection ase() { return ase; }
+    Connection source() { return db; }
 
     @Override public Connection gg() { return gg; }
 
@@ -53,18 +53,18 @@ final class SybaseCdc implements CdcSource {
 
     @Override public List<String> tableNames() { return Tables.ALL.stream().map(t -> t.name).toList(); }
 
-    @Override public long countRows(String table) throws SQLException { return queryLong(ase, "select count(*) from " + table); }
+    @Override public long countRows(String table) throws SQLException { return queryLong(db, "select count(*) from " + table); }
 
     @Override
     public void connect() throws SQLException {
         close();
-        ase = DriverManager.getConnection(aseUrl, aseUser, asePass);
+        db = DriverManager.getConnection(dbUrl, dbUser, dbPass);
         gg = DriverManager.getConnection(ggUrl);
     }
 
     @Override
     public void close() {
-        for (Connection c : new Connection[] {ase, gg}) {
+        for (Connection c : new Connection[] {db, gg}) {
             try { if (c != null) c.close(); } catch (SQLException ignored) { }
         }
     }
@@ -76,12 +76,12 @@ final class SybaseCdc implements CdcSource {
     public void init() throws Exception {
         try (Statement st = gg.createStatement()) {
             for (TableSpec t : Tables.ALL) st.execute("DROP TABLE IF EXISTS " + t.name);
-            for (String ddl : readResource("/gridgain-schema-sybase.sql").split(";")) {
+            for (String ddl : readResource("/gridgain-schema-mariadb.sql").split(";")) {
                 if (!stripComments(ddl).isBlank()) st.execute(ddl);
             }
         }
         // Watermark first: changes made while the copy runs are replayed afterwards (idempotent).
-        long watermark = queryLong("select isnull(max(change_id), 0) from cdc_change_log");
+        long watermark = queryLong("select ifnull(max(change_id), 0) from cdc_change_log");
         System.out.println("snapshot watermark change_id=" + watermark);
         for (TableSpec t : Tables.ALL) {
             long n = copyAll(t);
@@ -93,7 +93,7 @@ final class SybaseCdc implements CdcSource {
 
     private long copyAll(TableSpec t) throws SQLException {
         long total = 0;
-        try (Statement s = ase.createStatement(); ResultSet rs = s.executeQuery(t.selectSql());
+        try (Statement s = db.createStatement(); ResultSet rs = s.executeQuery(t.selectSql());
              PreparedStatement merge = gg.prepareStatement(t.mergeSql())) {
             int pending = 0;
             while (rs.next()) {
@@ -118,9 +118,9 @@ final class SybaseCdc implements CdcSource {
         long last = offset;
         long oldest = Long.MAX_VALUE;
         int events = 0;
-        try (PreparedStatement ps = ase.prepareStatement(
-                "select top " + limit + " change_id, table_name, pk_value, change_ts from cdc_change_log "
-                    + "where change_id > ? order by change_id")) {
+        try (PreparedStatement ps = db.prepareStatement(
+                "select change_id, table_name, pk_value, change_ts from cdc_change_log "
+                    + "where change_id > ? order by change_id limit " + limit)) {
             ps.setLong(1, offset);
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
@@ -143,7 +143,7 @@ final class SybaseCdc implements CdcSource {
             try (PreparedStatement merge = gg.prepareStatement(t.mergeSql())) {
                 for (int i = 0; i < pks.size(); i += IN_CHUNK) {
                     List<String> chunk = pks.subList(i, Math.min(i + IN_CHUNK, pks.size()));
-                    try (PreparedStatement q = ase.prepareStatement(t.selectSql() + " where t." + t.pk + " in ("
+                    try (PreparedStatement q = db.prepareStatement(t.selectSql() + " where t." + t.pk + " in ("
                             + "?, ".repeat(chunk.size() - 1) + "?)")) {
                         for (int k = 0; k < chunk.size(); k++) setPk(q, k + 1, t, chunk.get(k));
                         try (ResultSet rs = q.executeQuery()) {
@@ -180,13 +180,13 @@ final class SybaseCdc implements CdcSource {
     @Override
     public void status() throws SQLException {
         long offset = getOffset();
-        long max = queryLong("select isnull(max(change_id), 0) from cdc_change_log");
+        long max = queryLong("select ifnull(max(change_id), 0) from cdc_change_log");
         long pending = queryLong("select count(*) from cdc_change_log where change_id > " + offset);
         System.out.printf("consumer=%s offset=%d newest_change_id=%d pending_events=%d%n", CONSUMER, offset, max, pending);
-        System.out.printf("%-18s %8s %8s%n", "table", "sybase", "gridgain");
+        System.out.printf("%-18s %8s %8s%n", "table", "mariadb", "gridgain");
         for (TableSpec t : Tables.ALL) {
             System.out.printf("%-18s %8d %8d%n", t.name,
-                queryLong(ase, "select count(*) from " + t.name),
+                queryLong(db, "select count(*) from " + t.name),
                 queryLong(gg, "select count(*) from " + t.name));
         }
     }
@@ -195,9 +195,9 @@ final class SybaseCdc implements CdcSource {
     @Override
     public boolean verify() throws SQLException {
         boolean ok = true;
-        System.out.printf("%-18s %8s %8s %8s %8s %8s%n", "table", "sybase", "gridgain", "missing", "extra", "differ");
+        System.out.printf("%-18s %8s %8s %8s %8s %8s%n", "table", "mariadb", "gridgain", "missing", "extra", "differ");
         for (TableSpec t : Tables.ALL) {
-            Map<String, String> src = hashes(ase, t.selectSql(), t);
+            Map<String, String> src = hashes(db, t.selectSql(), t);
             Map<String, String> dst = hashes(gg, t.gridSelectSql(), t);
             int missing = 0, extra = 0, differ = 0;
             List<String> samples = new ArrayList<>();
@@ -214,7 +214,7 @@ final class SybaseCdc implements CdcSource {
             samples.forEach(s -> System.out.println("   " + s));
             ok &= (missing + extra + differ) == 0;
         }
-        System.out.println(ok ? "VERIFY OK: Sybase and GridGain are identical" : "VERIFY FAILED");
+        System.out.println(ok ? "VERIFY OK: MariaDB and GridGain are identical" : "VERIFY FAILED");
         return ok;
     }
 
@@ -251,7 +251,7 @@ final class SybaseCdc implements CdcSource {
     }
 
     long getOffset() throws SQLException {
-        try (PreparedStatement ps = ase.prepareStatement("select last_change_id from cdc_offset where consumer = ?")) {
+        try (PreparedStatement ps = db.prepareStatement("select last_change_id from cdc_offset where consumer = ?")) {
             ps.setString(1, CONSUMER);
             try (ResultSet rs = ps.executeQuery()) {
                 if (rs.next()) return rs.getLong(1);
@@ -261,14 +261,14 @@ final class SybaseCdc implements CdcSource {
     }
 
     private void setOffset(long id) throws SQLException {
-        try (PreparedStatement up = ase.prepareStatement(
-                "update cdc_offset set last_change_id = ?, updated_at = getdate() where consumer = ?")) {
+        try (PreparedStatement up = db.prepareStatement(
+                "update cdc_offset set last_change_id = ?, updated_at = now() where consumer = ?")) {
             up.setLong(1, id);
             up.setString(2, CONSUMER);
             if (up.executeUpdate() > 0) return;
         }
-        try (PreparedStatement ins = ase.prepareStatement(
-                "insert cdc_offset (consumer, last_change_id, updated_at) values (?, ?, getdate())")) {
+        try (PreparedStatement ins = db.prepareStatement(
+                "insert into cdc_offset (consumer, last_change_id, updated_at) values (?, ?, now())")) {
             ins.setString(1, CONSUMER);
             ins.setLong(2, id);
             ins.executeUpdate();
@@ -283,11 +283,11 @@ final class SybaseCdc implements CdcSource {
     }
 
     private long queryLong(String sql) throws SQLException {
-        return queryLong(ase, sql);
+        return queryLong(db, sql);
     }
 
     static String readResource(String path) throws java.io.IOException {
-        try (var in = SybaseCdc.class.getResourceAsStream(path)) {
+        try (var in = MariaDbCdc.class.getResourceAsStream(path)) {
             return new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
         }
     }

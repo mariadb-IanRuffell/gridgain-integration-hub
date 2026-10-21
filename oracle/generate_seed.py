@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Generate sql/02_seed.sql: flights, seat inventory and bookings for the travel/reservations system.
 
-Deterministic (seed=7) relative to the time it is run. Bookings use customer ids 1..250, the same ids as the Sybase CRM
+Deterministic (seed=7) relative to the time it is run. Bookings use customer ids 1..250, the same ids as the MariaDB CRM
 system, so the two datasets can be joined in the GridGain hub.
 """
 import random

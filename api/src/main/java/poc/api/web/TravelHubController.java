@@ -49,7 +49,7 @@ public class TravelHubController {
 
     @GetMapping("/customers/{customerId}/hub")
     @Operation(summary = "Hub: one customer view across BOTH source systems",
-        description = "Joins data that no single source holds. From Sybase: profile, loyalty tier and points, completed orders. From Oracle: bookings, "
+        description = "Joins data that no single source holds. From MariaDB: profile, loyalty tier and points, completed orders. From Oracle: bookings, "
             + "miles, upcoming trips and the ones on delayed or cancelled flights. Also combines them: lifetime_value = retail spend + travel spend. "
             + "Sections: profile, retail, travel, upcoming_trips, at_risk_trips, value.")
     Map<String, Object> hub(@PathVariable int customerId) {
@@ -67,7 +67,7 @@ public class TravelHubController {
     }
 
     @GetMapping("/compensation")
-    @Operation(summary = "List computed compensation", description = "Written by POST /disruptions/process. Filter by customer (Sybase id) or flight.")
+    @Operation(summary = "List computed compensation", description = "Written by POST /disruptions/process. Filter by customer (MariaDB id) or flight.")
     Page<Compensation> compensation(@RequestParam(required = false) Integer customerId,
                                     @RequestParam(required = false) Integer flightId,
                                     @RequestParam(defaultValue = "50") @Min(1) @Max(500) int limit,

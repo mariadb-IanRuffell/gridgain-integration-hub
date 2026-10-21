@@ -66,7 +66,7 @@ class ScoreCustomersTaskTest {
         Map<?, ?> high = (Map<?, ?>) out.get(0), low = (Map<?, ?>) out.get(1), med = (Map<?, ?>) out.get(2);
         assertEquals("HIGH", high.get("risk_band"));
         assertEquals(3L, high.get("customers"));
-        assertEquals(70L, high.get("avg_score"));         // (150 + 61) / 3 = 70 (integer division, like ASE avg(int))
+        assertEquals(70L, high.get("avg_score"));         // (150 + 61) / 3 = 70 (integer division, like the SQL integer average)
         assertEquals(10L, low.get("avg_score"));
         assertEquals(42L, med.get("avg_score"));          // 170 / 4
     }

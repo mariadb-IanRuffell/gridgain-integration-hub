@@ -1,4 +1,4 @@
--- GridGain 8.9 target schema for the Sybase Customer 360 data.
+-- GridGain 8.9 target schema for the MariaDB Customer 360 data.
 -- Everything customer-owned is colocated on customer_id so that Phase 2 compute jobs
 -- (sp_customer_360, sp_score_customers, order flow) run next to their data.
 -- order_item and payment carry a denormalised customer_id (resolved by the CDC reader via orders).

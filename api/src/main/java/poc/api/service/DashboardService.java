@@ -17,7 +17,7 @@ import poc.api.repo.DashboardRepository.SourceCount;
 import poc.api.repo.DashboardRepository.TableRef;
 
 /**
- * Samples REST counters (in-process) and the CDC counters each reader publishes into GridGain (Sybase and Oracle) every 2 seconds,
+ * Samples REST counters (in-process) and the CDC counters each reader publishes into GridGain (MariaDB and Oracle) every 2 seconds,
  * turns the cumulative values into per-second rates, and keeps the last 15 minutes in memory for the graphs.
  */
 @Service
@@ -26,7 +26,7 @@ public class DashboardService {
     static final int INTERVAL_MS = 2_000, KEEP = 450;           // 450 x 2 s = 15 minutes
     private static final long CDC_STALE_MS = 10_000;            // the readers heartbeat every 2 s
 
-    /** cdc* fields are the Sybase reader, ora* fields the Oracle reader. */
+    /** cdc* fields are the MariaDB reader, ora* fields the Oracle reader. */
     public record Sample(long t, double apiReqPerSec, double apiReadsPerSec, double apiWritesPerSec, double apiErrorsPerSec, double apiAvgMs,
                          double cdcEventsPerSec, double cdcUpsertsPerSec, double cdcDeletesPerSec, long cdcPending, long cdcLatencyMs,
                          double oraEventsPerSec, double oraUpsertsPerSec, double oraDeletesPerSec, long oraPending, long oraLatencyMs) {}
@@ -87,7 +87,7 @@ public class DashboardService {
     private final RequestMetrics metrics;
     private final DashboardRepository repo;
     private final Deque<Sample> samples = new ArrayDeque<>();
-    private final Track sybase = new Track(DashboardRepository.SYBASE_CONSUMER, "sybase");
+    private final Track mariadb = new Track(DashboardRepository.MARIADB_CONSUMER, "mariadb");
     private final Track oracle = new Track(DashboardRepository.ORACLE_CONSUMER, "oracle");
 
     private long prevT;
@@ -108,7 +108,7 @@ public class DashboardService {
         long now = System.currentTimeMillis();
         RequestMetrics.Snapshot api = metrics.snapshot();
         try {
-            sybase.update(now, repo.cdcStatus(sybase.consumer).orElse(null));
+            mariadb.update(now, repo.cdcStatus(mariadb.consumer).orElse(null));
             oracle.update(now, repo.cdcStatus(oracle.consumer).orElse(null));
             if (now - lastTablesMs >= 1_500) refreshTables(now);
         } catch (RuntimeException e) {
@@ -121,7 +121,7 @@ public class DashboardService {
             double avgMs = dReq > 0 ? (api.nanos() - prevApi.nanos()) / 1e6 / dReq : 0;
             double errors = (api.clientErrors() + api.serverErrors() - prevApi.clientErrors() - prevApi.serverErrors()) / dt;
             Sample s = new Sample(now, dReq / dt, (api.reads() - prevApi.reads()) / dt, (api.writes() - prevApi.writes()) / dt, errors, avgMs,
-                sybase.rates[0], sybase.rates[1], sybase.rates[2], pending(sybase), latency(sybase),
+                mariadb.rates[0], mariadb.rates[1], mariadb.rates[2], pending(mariadb), latency(mariadb),
                 oracle.rates[0], oracle.rates[1], oracle.rates[2], pending(oracle), latency(oracle));
             synchronized (samples) {
                 samples.addLast(s);
@@ -174,7 +174,7 @@ public class DashboardService {
         Long totalSrc = !replicated.isEmpty() && replicated.stream().allMatch(t -> t.sourceRows() != null)
             ? replicated.stream().mapToLong(TableSize::sourceRows).sum() : null;
         List<CdcStatus> cdc = new ArrayList<>();
-        for (Track t : List.of(sybase, oracle)) {
+        for (Track t : List.of(mariadb, oracle)) {
             CdcStatus s = t.status(now);
             if (s != null) cdc.add(s);
         }

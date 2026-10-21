@@ -25,7 +25,7 @@ import poc.compute.jobs.OfferModel.Trip;
 /**
  * Generates personalised offers from each customer's buying behaviour (see OfferModel for the scoring). One job runs on EACH node and handles
  * only the customers that node owns: purchase history, churn band and the next flight are read with LOCAL queries (all customer-owned tables,
- * Sybase and Oracle, are colocated on customer_id). Only the "customers like you" signal needs the whole cluster, and it is one small
+ * MariaDB and Oracle, are colocated on customer_id). Only the "customers like you" signal needs the whole cluster, and it is one small
  * distributed aggregate (buyers per tier and product). Offers are written to customer_offer, replacing the customer's previous ones, so a
  * re-run is idempotent. Nothing leaves the cluster.
  *

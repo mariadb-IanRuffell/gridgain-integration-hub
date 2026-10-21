@@ -53,7 +53,7 @@ public class ScoreCustomersTask extends ComputeTaskAdapter<Long, List<Object>> {
             LinkedHashMap<String, Object> row = new LinkedHashMap<>();
             row.put("risk_band", e.getKey());
             row.put("customers", e.getValue()[0]);
-            row.put("avg_score", e.getValue()[1] / e.getValue()[0]);   // integer average, like ASE avg(int)
+            row.put("avg_score", e.getValue()[1] / e.getValue()[0]);   // integer average, like the SQL integer average
             out.add(row);
         }
         return out;
@@ -115,7 +115,7 @@ public class ScoreCustomersTask extends ComputeTaskAdapter<Long, List<Object>> {
                 if (!ignite.affinity("customer").isPrimary(me, cid)) continue;   // owner scores it, not a backup
 
                 Timestamp last = lastOrder.get(cid);
-                // ASE datediff(dd, a, b) counts calendar-day boundaries crossed, not elapsed 24h periods.
+                // MariaDB DATEDIFF(a, b) counts calendar-day boundaries crossed, not elapsed 24h periods.
                 long recency = last == null ? 9999
                     : ChronoUnit.DAYS.between(last.toLocalDateTime().toLocalDate(), asOf.toLocalDateTime().toLocalDate());
                 long o12 = orders12m.getOrDefault(cid, 0L);

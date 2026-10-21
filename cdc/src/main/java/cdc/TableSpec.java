@@ -2,14 +2,14 @@ package cdc;
 
 import java.util.List;
 
-/** Maps one Sybase source table to its GridGain table. */
+/** Maps one MariaDB source table to its GridGain table. */
 final class TableSpec {
     final String name;
     final String pk;                 // primary-key column (same name on both sides)
     final boolean pkIsString;
     final List<String> columns;      // GridGain column names, in order
-    final List<String> sourceExprs;  // Sybase select expressions, aligned with columns
-    final String sourceFrom;         // Sybase FROM clause; the base table is aliased "t"
+    final List<String> sourceExprs;  // MariaDB select expressions, aligned with columns
+    final String sourceFrom;         // MariaDB FROM clause; the base table is aliased "t"
     final int pkIndex;
 
     TableSpec(String name, String pk, boolean pkIsString, List<String> columns,
@@ -23,7 +23,7 @@ final class TableSpec {
         this.pkIndex = columns.indexOf(pk);
     }
 
-    /** Columns map 1:1 to the Sybase table. */
+    /** Columns map 1:1 to the MariaDB table. */
     static TableSpec plain(String name, String pk, String... cols) {
         return plain(name, pk, false, cols);
     }
