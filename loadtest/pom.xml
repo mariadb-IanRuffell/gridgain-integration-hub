@@ -10,7 +10,7 @@
   <properties>
     <maven.compiler.release>17</maven.compiler.release>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    <gridgain.version>8.9.38</gridgain.version>
+    <gridgain.version>8.10.0</gridgain.version>
     <junit.version>5.10.3</junit.version>
   </properties>
 

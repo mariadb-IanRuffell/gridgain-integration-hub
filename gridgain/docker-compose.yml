@@ -1,8 +1,8 @@
-# 3-node GridGain 8.9.38 Community cluster with native persistence (native arm64/amd64).
+# 3-node GridGain 8.10.0 Community cluster with native persistence (native arm64/amd64).
 # Thin client / JDBC / thin compute: localhost:10800, 10801, 10802 (one per node).
 # Start with ./cluster.sh up (a persistent cluster must be activated once all nodes have joined).
 x-node: &node
-  image: gridgain/community:8.9.38
+  image: gridgain/community:8.10.0-b2-openjdk17
 
 services:
   gridgain1:

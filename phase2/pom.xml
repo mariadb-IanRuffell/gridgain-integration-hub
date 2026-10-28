@@ -8,10 +8,10 @@
   <packaging>jar</packaging>
 
   <properties>
-    <!-- The gridgain/community image runs Java 11, so the jobs must target 11. -->
+    <!-- The gridgain/community 8.10 image runs Java 17; jobs stay compiled to release 11 (that bytecode still loads on 17). -->
     <maven.compiler.release>11</maven.compiler.release>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    <gridgain.version>8.9.38</gridgain.version>
+    <gridgain.version>8.10.0</gridgain.version>
       <junit.version>5.10.3</junit.version>
     <mockito.version>5.12.0</mockito.version>
   </properties>

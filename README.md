@@ -1,6 +1,6 @@
 # MariaDB + Oracle → GridGain: phased migration PoC (data hub)
 
-Two source systems with deliberately **different, complementary data** are moved onto one GridGain 8.9 cluster in the same
+Two source systems with deliberately **different, complementary data** are moved onto one GridGain 8.10 cluster in the same
 two phases, and joined there:
 
 | System | Domain | Data | Join key |
@@ -52,7 +52,7 @@ mariadb/
 | `sp_create_order` / `sp_add_order_item` / `sp_complete_order` | multi-statement transactions, stock check, proc-to-proc call, error codes | transactional job (or three) with colocated orders/items/payment |
 | `sp_score_customers(p_as_of, p_customer_id)` | cursor over all customers, per-row queries, upsert | broadcast/map-reduce job, one partition per node |
 
-## Phase 1 (done): trigger-based CDC into GridGain 8.9.38
+## Phase 1 (done): trigger-based CDC into GridGain 8.10.0
 
 ```
 MariaDB --triggers--> cdc_change_log --poll--> cdc/ (Java) --MERGE/DELETE--> GridGain (thin JDBC)
@@ -67,7 +67,7 @@ MariaDB --triggers--> cdc_change_log --poll--> cdc/ (Java) --MERGE/DELETE--> Gri
 - **Reader** (`cdc/`): batches log rows, collapses them to distinct keys, re-reads the *current* row from
   MariaDB and MERGEs it into GridGain (or DELETEs if the row is gone). Because it applies state rather than
   operations, replays are harmless; the offset is committed only after GridGain has the data.
-- **GridGain** (3-node persistent cluster, see "GridGain cluster" below; image `gridgain/community:8.9.38`, native arm64):
+- **GridGain** (3-node persistent cluster, see "GridGain cluster" below; image `gridgain/community:8.10.0-b2-openjdk17`, multi-arch amd64/arm64):
   tables from `cdc/src/main/resources/gridgain-schema-mariadb.sql`. Customer-owned tables are colocated on
   `customer_id`; `order_item`/`payment` carry a denormalised `customer_id` (resolved through `orders`);
   `product` and `loyalty_tier_rule` are replicated. This is the layout Phase 2 compute jobs will use.
@@ -131,7 +131,7 @@ On 3 nodes the scoring job split the three nodes' shares summing to 240 customer
 **How deployment works:** `gridgain/config/node.xml` enables thin-client compute (off by default),
 `gridgain/deploy/gg-compute.jar` is mounted into `libs/external` (on each node's classpath). A node loads job
 classes at start, so `redeploy.sh` does a rolling restart (one node at a time, cluster stays up, data is persisted).
-The image runs Java 11, so the module compiles at `--release 11`. All GridGain tables are `TRANSACTIONAL`
+The 8.10 image runs Java 17; the module stays compiled at `--release 11` (its bytecode still loads on 17). All GridGain tables are `TRANSACTIONAL`
 with explicit key/value type names so jobs can update several of them atomically.
 
 **Behavioural differences from the SQL procedures (deliberate):**
@@ -428,7 +428,7 @@ cd loadtest
 
 Each run writes `results/<time>-<profile>/` with `report.html` (load shape, throughput, latency against the p95 limit, throughput against load, governor events,
 top errors), `timeseries.csv` and `summary.json`. Profiles are in `loadtest/profiles/` (`smoke`, `oltp-updown`, `oltp-heavy` for finding saturation); the keys are
-documented in `Profile.java`. The "transfer" is one SQL statement updating both rows, because GridGain 8.9 SQL transactions need MVCC tables, which the persistent
+documented in `Profile.java`. The "transfer" is one SQL statement updating both rows, because GridGain 8.10 SQL transactions need MVCC tables, which the persistent
 cluster does not use. Load goes straight to the cluster over JDBC, so it does not show in the dashboard's REST graphs; watch the nodes with `docker stats`.
 
 ## Environment
@@ -438,7 +438,7 @@ CDC readers. Nothing is remote. MariaDB login `crm` / `crm` (PoC only), database
 Host-side tools default to those addresses (`MARIADB_URL`, `ORA_URL`, `GG_URL`, ... override them).
 
 ## GridGain note
-The `gridgain-8.9` skill says `gridgain/community` is amd64-only; that is outdated for 8.9.38, which
+The `gridgain-8.9` skill says `gridgain/community` is amd64-only; that is outdated for 8.10.0, which
 publishes amd64 and arm64.
 
 ## MariaDB gotchas hit so far
@@ -449,7 +449,7 @@ publishes amd64 and arm64.
 - `START TRANSACTION` inside a procedure commits any transaction the caller had open.
 - Procedures cannot return a status code: errors are `SIGNAL ... SET MYSQL_ERRNO = 20002`, and Connector/J reports that number in `SQLException.getErrorCode()`.
 
-## GridGain 8.9 gotchas hit in Phase 2
+## GridGain 8.10 gotchas hit in Phase 2
 - Thin-client compute is off by default (`maxActiveComputeTasksPerConnection` = 0).
 - A cache transaction cannot touch ATOMIC caches, and the first use of an atomic sequence starts a system
   cache, which is not allowed inside a transaction: allocate ids before `txStart`.
