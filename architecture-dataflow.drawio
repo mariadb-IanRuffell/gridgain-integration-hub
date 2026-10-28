@@ -1,0 +1,151 @@
+<mxfile host="app.diagrams.net">
+  <diagram id="srJpnugiACeLcwi2tDlF" name="Page-1">
+    <mxGraphModel dx="1214" dy="1067" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1700" pageHeight="800" math="0" shadow="0" adaptiveColors="auto">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" parent="1" style="text;html=1;align=left;verticalAlign=middle;fontSize=18;fontStyle=1;" value="MariaDB + Oracle → GridGain 8.9 Data Hub — Architecture &amp; Data Flows" vertex="1">
+          <mxGeometry height="30" width="1000" x="40" y="20" as="geometry" />
+        </mxCell>
+        <mxCell id="subtitle" parent="1" style="text;html=1;align=left;verticalAlign=middle;fontSize=11;fontColor=#555555;" value="Phase 1: trigger-based CDC (sources stay systems of record).   Phase 2: stored procedures re-implemented as GridGain compute jobs; apps call GridGain." vertex="1">
+          <mxGeometry height="20" width="1100" x="40" y="50" as="geometry" />
+        </mxCell>
+        <mxCell id="mdb_box" parent="1" style="rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;align=center;fontStyle=1;fontSize=11;fillColor=#eef3fb;strokeColor=#6c8ebf;" value="MariaDB 11.4&lt;br&gt;CRM / customer-360  ·  SYSTEM OF RECORD" vertex="1">
+          <mxGeometry height="275" width="250" x="40" y="90" as="geometry" />
+        </mxCell>
+        <mxCell id="mdb_tables" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=10;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="10 tables&#xa;customer · address · product · orders&#xa;order_item · payment · interaction&#xa;loyalty_txn · customer_score · loyalty_tier_rule" vertex="1">
+          <mxGeometry height="75" width="220" x="55" y="140" as="geometry" />
+        </mxCell>
+        <mxCell id="mdb_trig" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=10;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="30 row triggers → cdc_log()&#xa;(log the key only; no schema change)" vertex="1">
+          <mxGeometry height="45" width="220" x="55" y="230" as="geometry" />
+        </mxCell>
+        <mxCell id="mdb_log" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=10;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="cdc_change_log  (op I/U/D + pk)&#xa;cdc_offset  ·  cdc_seq&#xa;gapless, commit-order change ids" vertex="1">
+          <mxGeometry height="60" width="220" x="55" y="290" as="geometry" />
+        </mxCell>
+        <mxCell id="ora_box" parent="1" style="rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;align=center;fontStyle=1;fontSize=11;fillColor=#fbeeed;strokeColor=#b85450;" value="Oracle 26ai Free&lt;br&gt;Travel / reservations  ·  SYSTEM OF RECORD" vertex="1">
+          <mxGeometry height="275" width="250" x="40" y="400" as="geometry" />
+        </mxCell>
+        <mxCell id="ora_tables" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=10;fillColor=#f8cecc;strokeColor=#b85450;" value="7 tables&#xa;airport · flight · seat_inventory&#xa;booking · segment · flight_event · compensation&#xa;booking.customer_id = CRM customer_id" vertex="1">
+          <mxGeometry height="75" width="220" x="55" y="450" as="geometry" />
+        </mxCell>
+        <mxCell id="ora_trig" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=10;fillColor=#f8cecc;strokeColor=#b85450;" value="row triggers → change log" vertex="1">
+          <mxGeometry height="40" width="220" x="55" y="540" as="geometry" />
+        </mxCell>
+        <mxCell id="ora_log" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=10;fillColor=#f8cecc;strokeColor=#b85450;" value="change log  (op + pk)&#xa;SCN watermark checkpoint" vertex="1">
+          <mxGeometry height="60" width="220" x="55" y="595" as="geometry" />
+        </mxCell>
+        <mxCell id="cdc1" parent="1" style="rounded=1;whiteSpace=wrap;html=1;align=center;fontSize=10;fillColor=#fff2cc;strokeColor=#d6b656;" value="gg-cdc   (CDC reader · Java)&#xa;CDC_SOURCE=mariadb&#xa;• poll change_id &amp;gt; last, collapse to distinct keys&#xa;• re-read current row → MERGE / DELETE&#xa;• commit offset only after GridGain has data" vertex="1">
+          <mxGeometry height="110" width="245" x="360" y="150" as="geometry" />
+        </mxCell>
+        <mxCell id="cdc_note" parent="1" style="rounded=1;whiteSpace=wrap;html=1;dashed=1;fontSize=10;fillColor=#f5f5f5;strokeColor=#999999;fontColor=#555555;" value="State-based &amp; idempotent · one-way source → GridGain&#xa;replays are harmless (MERGE/DELETE current state)" vertex="1">
+          <mxGeometry height="55" width="245" x="360" y="370" as="geometry" />
+        </mxCell>
+        <mxCell id="cdc2" parent="1" style="rounded=1;whiteSpace=wrap;html=1;align=center;fontSize=10;fillColor=#fff2cc;strokeColor=#d6b656;" value="gg-cdc-oracle   (CDC reader · Java)&#xa;CDC_SOURCE=oracle&#xa;• poll SCN window&#xa;• idempotent MERGE / DELETE&#xa;• SCN watermark checkpoint" vertex="1">
+          <mxGeometry height="110" width="245" x="360" y="470" as="geometry" />
+        </mxCell>
+        <mxCell id="gg_box" parent="1" style="rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;align=center;fontStyle=1;fontSize=12;fillColor=#eef7ea;strokeColor=#82b366;" value="GridGain cluster  —  3 nodes&lt;div&gt;native persistence · colocated on customer_id&lt;/div&gt;" vertex="1">
+          <mxGeometry height="585" width="340" x="675" y="90" as="geometry" />
+        </mxCell>
+        <mxCell id="node1" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=10;fillColor=#d5e8d4;strokeColor=#82b366;" value="gridgain1&#xa;:10800" vertex="1">
+          <mxGeometry height="50" width="95" x="690" y="135" as="geometry" />
+        </mxCell>
+        <mxCell id="node2" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=10;fillColor=#d5e8d4;strokeColor=#82b366;" value="gridgain2&#xa;:10801" vertex="1">
+          <mxGeometry height="50" width="95" x="792" y="135" as="geometry" />
+        </mxCell>
+        <mxCell id="node3" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=10;fillColor=#d5e8d4;strokeColor=#82b366;" value="gridgain3&#xa;:10802" vertex="1">
+          <mxGeometry height="50" width="95" x="894" y="135" as="geometry" />
+        </mxCell>
+        <mxCell id="cache_mdb" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=10;fillColor=#dae8fc;strokeColor=#6c8ebf;" value="CRM caches  (from MariaDB)&#xa;customer/address/orders/order_item/payment/…&#xa;colocated on customer_id · product &amp; loyalty_tier_rule replicated" vertex="1">
+          <mxGeometry height="70" width="305" x="690" y="205" as="geometry" />
+        </mxCell>
+        <mxCell id="cache_ora" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=10;fillColor=#f8cecc;strokeColor=#b85450;" value="Travel caches  (from Oracle)&#xa;airport/flight/seat_inventory/booking/segment/…" vertex="1">
+          <mxGeometry height="55" width="305" x="690" y="285" as="geometry" />
+        </mxCell>
+        <mxCell id="cache_offer" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=10;fillColor=#d5e8d4;strokeColor=#82b366;" value="customer_offer  (GridGain-native · no source system)&#xa;written by RecommendOffersTask" vertex="1">
+          <mxGeometry height="50" width="305" x="690" y="350" as="geometry" />
+        </mxCell>
+        <mxCell id="metrics" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=10;fillColor=#fff2cc;strokeColor=#d6b656;" value="cdc_status  ·  cdc_table_counts&#xa;CDC health + GridGain vs source row counts (written by readers)" vertex="1">
+          <mxGeometry height="55" width="305" x="690" y="410" as="geometry" />
+        </mxCell>
+        <mxCell id="compute_in" parent="1" style="rounded=1;whiteSpace=wrap;html=1;align=center;fontSize=10;fillColor=#e1d5e7;strokeColor=#9673a6;" value="Compute jobs (phase2 · deployed on nodes, called by name)&lt;br&gt;&lt;div style=&quot;&quot;&gt;&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;Customer360 · RecalcLoyaltyTier · PlaceOrder · ScoreCustomers&lt;/span&gt;&lt;/div&gt;BookFlight · CancelBooking · RecordDelay · ProcessDisruptions&lt;br&gt;RecommendOffers · CustomerHub · Trips · DisruptionImpact" vertex="1">
+          <mxGeometry height="185" width="305" x="690" y="475" as="geometry" />
+        </mxCell>
+        <mxCell id="api_box" parent="1" style="rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;align=center;fontStyle=1;fontSize=11;fillColor=#fff6ec;strokeColor=#d79b00;" value="REST API  —  Spring Boot  (GridGain thin client)" vertex="1">
+          <mxGeometry height="265" width="285" x="1090" y="128" as="geometry" />
+        </mxCell>
+        <mxCell id="api_crud" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=10;fillColor=#ffe6cc;strokeColor=#d79b00;" value="CRUD controllers&#xa;customer/address/order/product/loyalty/interaction/offer&#xa;+ travel: airport/flight/booking" vertex="1">
+          <mxGeometry height="60" width="255" x="1105" y="173" as="geometry" />
+        </mxCell>
+        <mxCell id="api_ops" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=10;fillColor=#ffe6cc;strokeColor=#d79b00;" value="OperationsController → ComputeService&#xa;invokes compute jobs by name" vertex="1">
+          <mxGeometry height="45" width="255" x="1105" y="243" as="geometry" />
+        </mxCell>
+        <mxCell id="api_hub" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=10;fillColor=#ffe6cc;strokeColor=#d79b00;" value="TravelHubController → cross-source joins (CRM ⋈ travel)" vertex="1">
+          <mxGeometry height="40" width="255" x="1105" y="298" as="geometry" />
+        </mxCell>
+        <mxCell id="api_dash" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=10;fillColor=#ffe6cc;strokeColor=#d79b00;" value="DashboardController → cdc_status / cdc_table_counts" vertex="1">
+          <mxGeometry height="40" width="255" x="1105" y="343" as="geometry" />
+        </mxCell>
+        <mxCell id="dashboard_box" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=10;fillColor=#ffe6cc;strokeColor=#d79b00;" value="Live dashboard  (served by API)&#xa;GridGain vs source row deltas · CDC health" vertex="1">
+          <mxGeometry height="70" width="230" x="1451" y="169.5" as="geometry" />
+        </mxCell>
+        <mxCell id="hub_box" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=10;fillColor=#e1d5e7;strokeColor=#9673a6;" value="hub/  —  cross-source SQL joins&#xa;queries.sql · Query.java&#xa;CRM ⋈ travel on customer_id" vertex="1">
+          <mxGeometry height="70" width="285" x="1090" y="420" as="geometry" />
+        </mxCell>
+        <mxCell id="loadtest_box" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fontSize=10;fillColor=#f5f5f5;strokeColor=#666666;" value="loadtest/  —  OLTP load tester&#xa;ramp up/down + protective governor&#xa;(thin JDBC: smoke · oltp-updown · oltp-heavy)" vertex="1">
+          <mxGeometry height="70" width="285" x="1090" y="599" as="geometry" />
+        </mxCell>
+        <mxCell id="e_mdb_t1" edge="1" parent="1" source="mdb_tables" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeColor=#6c8ebf;" target="mdb_trig">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_mdb_t2" edge="1" parent="1" source="mdb_trig" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeColor=#6c8ebf;" target="mdb_log">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_ora_t1" edge="1" parent="1" source="ora_tables" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeColor=#b85450;" target="ora_trig">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_ora_t2" edge="1" parent="1" source="ora_trig" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;strokeColor=#b85450;" target="ora_log">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_log_cdc1" edge="1" parent="1" source="mdb_log" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;fontSize=9;" target="cdc1" value="poll change log">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_log_cdc2" edge="1" parent="1" source="ora_log" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;fontSize=9;" target="cdc2" value="poll SCN window">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_cdc1_gg" edge="1" parent="1" source="cdc1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;fontSize=9;strokeWidth=2;" target="cache_mdb" value="MERGE / DELETE&#xa;(thin JDBC)">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_cdc2_gg" edge="1" parent="1" source="cdc2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;fontSize=9;strokeWidth=2;" target="cache_ora" value="MERGE / DELETE&#xa;(thin JDBC)">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_cdc1_m" edge="1" parent="1" source="cdc1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;dashed=1;fontSize=9;strokeColor=#999999;" target="metrics" value="publish">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_cdc2_m" edge="1" parent="1" source="cdc2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;dashed=1;fontSize=9;strokeColor=#999999;" target="metrics" value="publish">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_api_crud" edge="1" parent="1" source="api_crud" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;fontSize=9;" target="cache_mdb" value="SQL CRUD (thin JDBC)">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_api_ops" edge="1" parent="1" source="api_ops" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;fontSize=9;" target="compute_in" value="call job by name">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_api_hub" edge="1" parent="1" source="api_hub" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;fontSize=9;" target="cache_ora" value="cross-source joins">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_api_dash" edge="1" parent="1" source="api_dash" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;dashed=1;fontSize=9;strokeColor=#999999;" target="metrics" value="read">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_dash" edge="1" parent="1" source="api_box" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;fontSize=9;" target="dashboard_box" value="HTTP / renders">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_hub_gg" edge="1" parent="1" source="hub_box" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;fontSize=9;" target="compute_in" value="SQL joins (thin JDBC)">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e_load_gg" edge="1" parent="1" source="loadtest_box" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;fontSize=9;" target="compute_in" value="OLTP load (thin JDBC)">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
