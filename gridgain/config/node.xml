@@ -31,10 +31,13 @@
                 <property name="ipFinder">
                     <bean class="org.apache.ignite.spi.discovery.tcp.ipfinder.vm.TcpDiscoveryVmIpFinder">
                         <property name="addresses">
+                            <!-- Hostnames come from -DGG_HOST1..3 (set by deploy/gridgain-node.sh from
+                                 deploy/cluster.env on physical servers); they default to the Docker
+                                 service names gridgain1..3 so the single-host compose setup is unchanged. -->
                             <list>
-                                <value>gridgain1:47500..47509</value>
-                                <value>gridgain2:47500..47509</value>
-                                <value>gridgain3:47500..47509</value>
+                                <value>#{systemProperties['GG_HOST1'] ?: 'gridgain1'}:47500..47509</value>
+                                <value>#{systemProperties['GG_HOST2'] ?: 'gridgain2'}:47500..47509</value>
+                                <value>#{systemProperties['GG_HOST3'] ?: 'gridgain3'}:47500..47509</value>
                             </list>
                         </property>
                     </bean>

@@ -1,6 +1,9 @@
 .DS_Store
 *.log
 
+# Physical-server deployment config: real hostnames/credentials (template is deploy/cluster.env.example)
+deploy/cluster.env
+
 # Build output (rebuild with mvn package / the build.sh scripts)
 **/target/
 # The compute-job jar is built by phase2/redeploy.sh and mounted into the GridGain nodes

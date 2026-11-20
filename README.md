@@ -437,6 +437,13 @@ Everything runs as Docker containers on this Mac, on the `gridgain_default` netw
 CDC readers. Nothing is remote. MariaDB login `crm` / `crm` (PoC only), database `crm`, port 3306; Oracle `travel` / `travel`, service `FREEPDB1`, port 1521.
 Host-side tools default to those addresses (`MARIADB_URL`, `ORA_URL`, `GG_URL`, ... override them).
 
+### Running on physical servers
+To run the stack across real servers instead of one Mac, see [`deploy/`](deploy/README.md): a single
+config file [`deploy/cluster.env`](deploy/cluster.env.example) holds every hostname, port and credential,
+and drives the GridGain discovery list plus all the clients (which already read their endpoints from the
+environment). It covers building, bringing up the 3-node cluster, loading both sources, CDC, and the API.
+The single-Mac workflow above is unchanged (`node.xml` still defaults to the `gridgain1/2/3` service names).
+
 ## GridGain note
 The `gridgain-8.9` skill says `gridgain/community` is amd64-only; that is outdated for 8.10.0, which
 publishes amd64 and arm64.
